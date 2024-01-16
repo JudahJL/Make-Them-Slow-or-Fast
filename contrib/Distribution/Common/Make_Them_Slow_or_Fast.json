@@ -1,0 +1,16 @@
+{
+  "Logging": {
+    "LogLevel": "trace"
+  },
+  "Where did it Crash": false,
+  "Aimed": {
+    "Concentrated": {
+      "Enable": true,
+      "Speed": 1000.0
+    },
+    "Fire and Forget": {
+      "Enable": true,
+      "Speed": 1000.0
+    }
+  }
+}

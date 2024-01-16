@@ -1,0 +1,13 @@
+{
+    "name": "makethemsloworfast",
+    "version-string": "1.0.0.1",
+    "port-version": 0,
+    "description": "A simple SKSE plugin built with CommonLibSSE-NG to patch control Magic Projectiles Speed",
+    "homepage": "https://www.skyrimng.com",
+    "license": "Apache-2.0",
+    "dependencies": [
+      "commonlibsse-ng",
+      "spdlog",
+      "nlohmann-json"
+    ]
+}
