@@ -1,6 +1,6 @@
 {
   "Logging": {
-    "LogLevel": "info"
+    "LogLevel": "trace"
   },
   "Aimed": {
     "Enable": true,
@@ -10,16 +10,16 @@
         "Speed": 1000.0
       },
       "Limit Speed": {
-        "Enable": false,
+        "Enable": true,
         "Min": 10.0,
         "Max": 1000.0
       },
       "Change Gravity": {
-        "Enable": false,
+        "Enable": true,
         "Gravity": 1.0
       },
       "Limit Gravity": {
-        "Enable": false,
+        "Enable": true,
         "Min": 0.0,
         "Max": 3.0
       }

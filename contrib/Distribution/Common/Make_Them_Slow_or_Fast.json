@@ -1,16 +1,30 @@
 {
   "Logging": {
-    "LogLevel": "trace"
+    "LogLevel": "info"
   },
-  "Where did it Crash": false,
   "Aimed": {
-    "Concentrated": {
-      "Enable": true,
-      "Speed": 1000.0
-    },
+    "Enable": true,
     "Fire and Forget": {
-      "Enable": true,
-      "Speed": 1000.0
+      "Change Speed": {
+        "Enable": true,
+        "Speed": 1000.0
+      },
+      "Limit Speed": {
+        "Enable": false,
+        "Min": 10.0,
+        "Max": 1000.0
+      },
+      "Change Gravity": {
+        "Enable": false,
+        "Gravity": 1.0
+      },
+      "Limit Gravity": {
+        "Enable": false,
+        "Min": 0.0,
+        "Max": 3.0
+      }
     }
-  }
+  },
+  "Key for repatching spells": 55,
+  "Key for Reseting spells": 74
 }
