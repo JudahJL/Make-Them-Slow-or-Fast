@@ -159,7 +159,7 @@ namespace MTSOF {
             formIDArray.insert(formIDArray.end(), mergeData["SPELL FormID to Exclude"].begin(), mergeData["SPELL FormID to Exclude"].end());
 
             // Collect all elements into tesFileArray
-            tesFileArray.insert(tesFileArray.end(), mergeData["SPELL File(s) to Exclude"].begin(), mergeData["Mod File(s) to Exclude"].end());
+            tesFileArray.insert(tesFileArray.end(), mergeData["SPELL File(s) to Exclude"].begin(), mergeData["SPELL File(s) to Exclude"].end());
         }
         void sortAndRemoveDuplicatesFromFormIDArrayAndTesFileArray() {
             // Sort and remove duplicates from formIDArray
@@ -366,19 +366,19 @@ namespace MTSOF {
                                         auto casttype = spell->data.castingType;
                                         bool ammoPatched = false;
                                         if (ds->getchangeAimedFireForgetSpeedEnable() || ds->getlimitAimedFireForgetSpeedEnable() || ds->getchangeAimedFireForgetGravityEnable() || ds->getlimitAimedFireForgetGravityEnable()) ammoPatched = true;
-                                        if ((ds->getenableAimed()) && ammoPatched) {
-                                            std::string data =
-                                                std::format("Original Aimed,Fire And Forget Spell :Full Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(),
-                                                            spell->GetRawFormID(), spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
-                                            if (calledAtKDataLoaded) {
-                                                debug("{}", ds->getstarredString());
-                                                debug("{}", data);
-                                            } else {
-                                                refresh->debug("{}", ds->getstarredString());
-                                                refresh->debug("{}", data);
-                                            }
-                                        }
                                         if ((delivery == RE::MagicSystem::Delivery::kAimed) && (casttype == RE::MagicSystem::CastingType::kFireAndForget)) {
+                                            if ((ds->getenableAimed()) && ammoPatched) {
+                                                std::string data =
+                                                    std::format("Original Aimed,Fire And Forget Spell :Full Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(),
+                                                                spell->GetRawFormID(), spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
+                                                if (calledAtKDataLoaded) {
+                                                    debug("{}", ds->getstarredString());
+                                                    debug("{}", data);
+                                                } else {
+                                                    refresh->debug("{}", ds->getstarredString());
+                                                    refresh->debug("{}", data);
+                                                }
+                                            }
                                             if (ds->getchangeAimedFireForgetSpeedEnable()) {
                                                 spellProjectile->data.speed = ds->getaimedFireForgetSpeed();
                                                 std::string data = "modified speed";
@@ -415,17 +415,17 @@ namespace MTSOF {
                                                     refresh->debug("{}", data);
                                                 }
                                             }
-                                        }
-                                        if ((ds->getenableAimed()) && ammoPatched) {
-                                            std::string data =
-                                                std::format("Modified Aimed,Fire And Forget Spell :Full Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(),
-                                                            spell->GetRawFormID(), spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
-                                            if (calledAtKDataLoaded) {
-                                                debug("{}", data);
-                                                debug("{}", ds->getstarredString());
-                                            } else {
-                                                refresh->debug("{}", data);
-                                                refresh->debug("{}", ds->getstarredString());
+                                            if ((ds->getenableAimed()) && ammoPatched) {
+                                                std::string data =
+                                                    std::format("Modified Aimed,Fire And Forget Spell :Full Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(),
+                                                                spell->GetRawFormID(), spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
+                                                if (calledAtKDataLoaded) {
+                                                    debug("{}", data);
+                                                    debug("{}", ds->getstarredString());
+                                                } else {
+                                                    refresh->debug("{}", data);
+                                                    refresh->debug("{}", ds->getstarredString());
+                                                }
                                             }
                                         }
                                     }
@@ -451,7 +451,8 @@ namespace MTSOF {
             try {
                 ds->setjsonData(json::parse(jsonfile));  // used for parsing main json file
             } catch (const json::parse_error e) {
-                std::string jsonDataString = R"({"Logging":{"LogLevel":"info"},"Aimed":{"Enable":true,"Fire and Forget":{"Change Speed":{"Enable":true,"Speed":1000.0},"Limit Speed":{"Enable":false,"Min":10.0,"Max":1000.0},"Change Gravity":{"Enable":false,"Gravity":1.0},"Limit Gravity":{"Enable":false,"Min":0.0,"Max":3.0}}},"Key for repatching spells":55,"Key for Reseting spells":74)";
+                std::string jsonDataString =
+                    R"({"Logging":{"LogLevel":"info"},"Aimed":{"Enable":true,"Fire and Forget":{"Change Speed":{"Enable":true,"Speed":1000.0},"Limit Speed":{"Enable":false,"Min":10.0,"Max":1000.0},"Change Gravity":{"Enable":false,"Gravity":1.0},"Limit Gravity":{"Enable":false,"Min":0.0,"Max":3.0}}},"Key for repatching spells":55,"Key for Reseting spells":74)";
 
                 ds->setjsonData(json::parse(jsonDataString));
                 std::string data[3] = {std::format("{}", e.what()), std::format("Data/SKSE/Plugins/{}.json parsing error : {}", SKSE::PluginDeclaration::GetSingleton()->GetName(), e.what()),
@@ -467,21 +468,20 @@ namespace MTSOF {
                 }
             }
             std::string stringData[13] = {"Aimed", "Enable", "Fire and Forget", "Change Speed", "Speed", "Limit Speed", "Min", "Max", "Change Gravity", "Gravity", "Limit Gravity", "Key for Reseting spells", "Key for repatching spells"};
-            ds->setenableAimed(ds->getJsonDataValue<bool>(stringData[0],stringData[1]));
-            ds->setchangeAimedFireForgetSpeedEnable(ds->getJsonDataValue<bool>(stringData[0],stringData[2],stringData[3],stringData[1]));
-            ds->setaimedFireForgetSpeed(ds->getJsonDataValue<float>(stringData[0],stringData[2],stringData[3],stringData[4]));
-            ds->setlimitAimedFireForgetSpeedEnable(ds->getJsonDataValue<bool>(stringData[0],stringData[2],stringData[5],stringData[1]));
-            ds->setlimitAimedFireForgetSpeedMin(ds->getJsonDataValue<float>(stringData[0],stringData[2],stringData[5],stringData[6]));
-            ds->setlimitAimedFireForgetSpeedMax(ds->getJsonDataValue<float>(stringData[0],stringData[2],stringData[5],stringData[7]));
+            ds->setenableAimed(ds->getJsonDataValue<bool>(stringData[0], stringData[1]));
+            ds->setchangeAimedFireForgetSpeedEnable(ds->getJsonDataValue<bool>(stringData[0], stringData[2], stringData[3], stringData[1]));
+            ds->setaimedFireForgetSpeed(ds->getJsonDataValue<float>(stringData[0], stringData[2], stringData[3], stringData[4]));
+            ds->setlimitAimedFireForgetSpeedEnable(ds->getJsonDataValue<bool>(stringData[0], stringData[2], stringData[5], stringData[1]));
+            ds->setlimitAimedFireForgetSpeedMin(ds->getJsonDataValue<float>(stringData[0], stringData[2], stringData[5], stringData[6]));
+            ds->setlimitAimedFireForgetSpeedMax(ds->getJsonDataValue<float>(stringData[0], stringData[2], stringData[5], stringData[7]));
 
-            ds->setchangeAimedFireForgetGravityEnable(ds->getJsonDataValue<bool>(stringData[0],stringData[2],stringData[8],stringData[1]));
-            ds->setaimedFireForgetGravity(ds->getJsonDataValue<float>(stringData[0],stringData[2],stringData[8],stringData[9]));
-            ds->setlimitAimedFireForgetGravityEnable(ds->getJsonDataValue<bool>(stringData[0],stringData[2],stringData[10],stringData[1]));
-            ds->setlimitAimedFireForgetGravityMin(ds->getJsonDataValue<float>(stringData[0],stringData[2],stringData[10],stringData[6]));
-            ds->setlimitAimedFireForgetGravityMax(ds->getJsonDataValue<float>(stringData[0],stringData[2],stringData[10],stringData[7]));
+            ds->setchangeAimedFireForgetGravityEnable(ds->getJsonDataValue<bool>(stringData[0], stringData[2], stringData[8], stringData[1]));
+            ds->setaimedFireForgetGravity(ds->getJsonDataValue<float>(stringData[0], stringData[2], stringData[8], stringData[9]));
+            ds->setlimitAimedFireForgetGravityEnable(ds->getJsonDataValue<bool>(stringData[0], stringData[2], stringData[10], stringData[1]));
+            ds->setlimitAimedFireForgetGravityMin(ds->getJsonDataValue<float>(stringData[0], stringData[2], stringData[10], stringData[6]));
+            ds->setlimitAimedFireForgetGravityMax(ds->getJsonDataValue<float>(stringData[0], stringData[2], stringData[10], stringData[7]));
             ds->setkeyForRefresh(ds->getJsonDataValue<int>(stringData[12]));
             ds->setkeyForReset(ds->getJsonDataValue<int>(stringData[11]));
-
 
             if (fs::exists(ds->getfolder_path()) && !fs::is_empty(ds->getfolder_path())) {
                 ds->sethasFilesToMerge(true);
@@ -511,14 +511,29 @@ namespace MTSOF {
                 }
             }
 
-            ds->sortAndRemoveDuplicatesFromFormIDArrayAndTesFileArray();
+            if (ds->gethasFilesToMerge()) ds->sortAndRemoveDuplicatesFromFormIDArrayAndTesFileArray();
 
             // debug("formIDArray : {}",formIDArray.dump(4));
             // debug("no of items in formIDArray : {}",formIDArray.size());
             // debug("tesFileArray : {}",tesFileArray.dump(4));
             // debug("no of items in tesFileArray : {}",tesFileArray.size());
-            std::string data[2] = {std::format("************************************No Exclusion will be Done**************************************"),
-                                   std::format("*************************************Finished Processing Data**************************************")};
+            std::string data[16] = {std::format("************************************No Exclusion will be Done**************************************"),//0
+                                    std::format("*************************************Finished Processing Data**************************************"),//1
+                                    std::format("Aimed :"),//2
+                                    std::format("Enabled : {} ;this is a ultimate kill switch for all aimed spells", ds->getenableAimed()),//3
+                                    std::format("Change Speed : {}", ds->getchangeAimedFireForgetSpeedEnable()),//4
+                                    std::format("New Speed Value : {}", ds->getaimedFireForgetSpeed()),//5
+                                    std::format("Change Gravity : {}", ds->getchangeAimedFireForgetGravityEnable()),//6
+                                    std::format("New Gravity Value : {}", ds->getaimedFireForgetSpeed()),//7
+                                    std::format("Limit Speed : {}", ds->getlimitAimedFireForgetSpeedEnable()),//8
+                                    std::format("Speed Min : {}", ds->getlimitAimedFireForgetSpeedMin()),//9
+                                    std::format("Speed Max : {}", ds->getlimitAimedFireForgetSpeedMax()),//10
+                                    std::format("Limit Gravity : {}", ds->getlimitAimedFireForgetGravityEnable()),//11
+                                    std::format("Gravity Min : {}", ds->getlimitAimedFireForgetGravityMin()),//12
+                                    std::format("Gravity Max : {}", ds->getlimitAimedFireForgetGravityMax()),//13
+                                    std::format("Key for Repatching spells : {}",ds->getkeyForRefresh()),//14
+                                    std::format("Key for reloading original values : {}",ds->getkeyForReset())//15
+            };
             if (!(ds->gethasFilesToMerge())) {
                 if (calledAtRuntime)
                     info("{}", data[0]);
@@ -526,10 +541,45 @@ namespace MTSOF {
                     refresh->info("{}", data[0]);
             }
 
-            if (calledAtRuntime)
+            if (calledAtRuntime) {
+                if (!(ds->gethasFilesToMerge())) info("{}", data[0]);
                 info("{}", data[1]);
-            else
+                info("{}", ds->getstarredString());
+                info("{}",data[2]);
+                info("{}", data[3]);
+                info("{}", data[4]);
+                info("{}", data[5]);
+                info("{}", data[8]);
+                info("{}", data[9]);
+                info("{}", data[10]);
+                info("{}", data[6]);
+                info("{}", data[7]);
+                info("{}", data[11]);
+                info("{}", data[12]);
+                info("{}", data[13]);
+                info("{}", data[14]);
+                info("{}", data[15]);
+                info("{}", ds->getstarredString());
+            } else {
+                if (!(ds->gethasFilesToMerge())) refresh->info("{}", data[0]);
                 refresh->info("{}", data[1]);
+                refresh->info("{}", ds->getstarredString());
+                refresh->info("{}", data[2]);
+                refresh->info("{}", data[3]);
+                refresh->info("{}", data[4]);
+                refresh->info("{}", data[5]);
+                refresh->info("{}", data[8]);
+                refresh->info("{}", data[9]);
+                refresh->info("{}", data[10]);
+                refresh->info("{}", data[6]);
+                refresh->info("{}", data[7]);
+                refresh->info("{}", data[11]);
+                refresh->info("{}", data[12]);
+                refresh->info("{}", data[13]);
+                refresh->info("{}", data[14]);
+                refresh->info("{}", data[15]);
+                refresh->info("{}", ds->getstarredString());
+            }
         }
     };
 
