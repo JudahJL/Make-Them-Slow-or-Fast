@@ -1,0 +1,45 @@
+name: CMake SKSE Setup
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup cmake
+      uses: lukka/get-cmake@latest
+    
+    - name: Restore from cache and setup vcpkg executable and data files.
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgJsonGlob: '${{ github.workspace }}\vcpkg.json'
+        
+    - name: Configure and Run CMake Preset for "Debug" preset
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: 'Debug'
+        buildPreset: 'Debug'
+
+    - name: Configure and Run CMake Preset for "Release" preset
+      uses: lukka/run-cmake@v10
+      with:
+        configurePreset: 'Release'
+        buildPreset: 'Release'
+      
+    - name: Deploy
+      uses: actions/upload-artifact@v4
+      with:
+        name: Make-Them-Slow-or-Fast
+        path: ${{github.workspace}}/contrib/Distribution/
+        compression-level: 9
+        if-no-files-found: error

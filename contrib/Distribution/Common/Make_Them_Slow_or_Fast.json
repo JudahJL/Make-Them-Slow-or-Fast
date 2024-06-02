@@ -25,6 +25,9 @@
       }
     }
   },
-  "Key for repatching spells": 55,
-  "Key for Reseting spells": 74
+  "Redo": {
+    "Enable": false,
+    "Key for repatching spells": 75,
+    "Key for Reseting spells": 77
+  }
 }
