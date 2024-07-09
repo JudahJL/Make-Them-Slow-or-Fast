@@ -3,14 +3,38 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 ## Define project
 ########################################################################################################################
+set(CURRENT_PROJECT_MAJOR_VER 1)
+set(CURRENT_PROJECT_MINOR_VER 1)
+set(CURRENT_PROJECT_PATCH_VER 0)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CURRENT_BUILD_TYPE "Debug")
+    set(CURRENT_PROJECT_BUILD_VER 2)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CURRENT_BUILD_TYPE "Release")
+    set(CURRENT_PROJECT_BUILD_VER 1)
+elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(CURRENT_BUILD_TYPE "RelWithDebInfo")
+    set(CURRENT_PROJECT_BUILD_VER 4)
+elseif(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+    set(CURRENT_BUILD_TYPE "MinSizeRel")
+    set(CURRENT_PROJECT_BUILD_VER 8)
+endif()
+
+message(STATUS "Build Type : ${CMAKE_BUILD_TYPE}")
 project(
         Make_Them_Slow_or_Fast
-        VERSION 1.0.0.3
-        DESCRIPTION "A simple SKSE plugin built with CommonLibSSE-NG to patch control Magic Projectiles Speed"
+        VERSION "${CURRENT_PROJECT_MAJOR_VER}.${CURRENT_PROJECT_MINOR_VER}.${CURRENT_PROJECT_PATCH_VER}.${CURRENT_PROJECT_BUILD_VER}"
+        DESCRIPTION "A simple SKSE plugin to patch All Aimed Fire and Forget Spells at runtime. Supports All Runtimes."
         LANGUAGES CXX)
+
+message(STATUS "Version: ${PROJECT_VERSION}")
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUG OFF)
+set(CMAKE_OPTIMIZE_DEPENDENCIES ON)
 
 include(GNUInstallDirs)
 
@@ -23,13 +47,6 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
         cmake_policy(SET CMP0135 NEW)
 endif()
 
-# set(headers )
-
-# set(sources
-#         ${CMAKE_CURRENT_SOURCE_DIR}/src/Main.cpp
-#         ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
-
-# Add headers
 file(
   GLOB_RECURSE
   headers
@@ -38,7 +55,6 @@ file(
 )
 list(REMOVE_ITEM headers ${CMAKE_CURRENT_SOURCE_DIR}/include/PCH.h)
 
-# Add sources
 file(
   GLOB_RECURSE
   sources
@@ -46,14 +62,6 @@ file(
   ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cc
   ${CMAKE_CURRENT_BINARY_DIR}/version.rc
 )
-
-# foreach(head ${headers})
-#     message("${head}")
-# endforeach()
-# 
-# foreach(source ${sources})
-#     message("${source}")
-# endforeach()
 
 set(misc
         CMakeLists.txt
@@ -74,18 +82,36 @@ source_group(
 #########################################################################################################################
 message("Options:")
 option(BUILD_TESTS "Build unit tests." OFF)
-message("\tTests: ${BUILD_TESTS}")
+message("\tTests: ${BUILD_TESTS}")    
+option(TESTING "Enable testing mode." OFF)
+message("\tTesting: ${TESTING}")
+
+
+# if(TESTING)
+#     add_definitions(-DTESTING)
+#     message(STATUS "Added TESTING Define Flag")   
+# endif()
+
+# if((CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo") AND TESTING)
+#     add_definitions(-DNDEBUG)
+#     message(STATUS "Added NDEBUG Define Flag")
+# endif()
+
 
 ########################################################################################################################
 ## Configure target DLL
 ########################################################################################################################
-find_package(CommonLibSSE CONFIG REQUIRED)
+set(PROJECT_AUTHOR "NoName365")
+
+add_subdirectory($ENV{CommonLibSSEPath} CommonLibSSE-NG)
+include($ENV{CommonLibSSEPath}/cmake/CommonLibSSE.cmake)
+# find_package(CommonLibSSE CONFIG REQUIRED)
 include(FetchContent)
 
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
 FetchContent_MakeAvailable(json)
 
-add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources} ${misc} AUTHOR "Noname365")
+add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources} ${misc} AUTHOR ${PROJECT_AUTHOR})
 add_library("${PROJECT_NAME}::${PROJECT_NAME}" ALIAS "${PROJECT_NAME}")
 
 target_include_directories(${PROJECT_NAME}
@@ -114,61 +140,57 @@ install(TARGETS ${PROJECT_NAME}
 ## Automatic plugin deployment
 ########################################################################################################################
 # Automatic deployment to FOMOD directory.
-if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(BUILD_NAME "Debug")
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(BUILD_NAME "Release")
-        elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-            set(BUILD_NAME "RelWithDebInfo")
-                elseif(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
-                    set(BUILD_NAME "MinSizeRel")
-endif()
-message("Build Type : ${CMAKE_BUILD_TYPE}")
+set(DISTRIBUTION_DIR "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/")
+set(CONTRIB_PROJECT_DIR "${DISTRIBUTION_DIR}/Plugin - ${CURRENT_BUILD_TYPE}/")
+set(CONTRIB_CONFIGURATION_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Configuration/")
+set(CONTRIB_COMMON_DIR "${DISTRIBUTION_DIR}/Common/")
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/Plugin - ${BUILD_NAME}/")
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/Plugin - ${BUILD_NAME}/")
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/Configuration/${PROJECT_NAME}.json" "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/Common")
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CONTRIB_PROJECT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> "${CONTRIB_PROJECT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CONTRIB_CONFIGURATION_DIR}/${PROJECT_NAME}.json" "${CONTRIB_COMMON_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CONTRIB_CONFIGURATION_DIR}/ExclusionHint.json" "${CONTRIB_COMMON_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CONTRIB_CONFIGURATION_DIR}/MainHint.json" "${CONTRIB_COMMON_DIR}")
+
 if(${CMAKE_BUILD_TYPE} STREQUAL Debug OR ${CMAKE_BUILD_TYPE} STREQUAL RelWithDebInfo)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_PDB_FILE:${PROJECT_NAME}> "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/Plugin - ${BUILD_NAME}/")
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_PDB_FILE:${PROJECT_NAME}> "${CONTRIB_PROJECT_DIR}")
 endif()
-file(GLOB_RECURSE OUTPUT_DLLS "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/Plugin - ${BUILD_NAME}/${PROJECT_NAME}.dll")
+file(GLOB_RECURSE OUTPUT_DLLS "${CONTRIB_PROJECT_DIR}/${PROJECT_NAME}.dll")
 if(${CMAKE_BUILD_TYPE} STREQUAL Debug OR ${CMAKE_BUILD_TYPE} STREQUAL RelWithDebInfo)
-    file(GLOB_RECURSE OUTPUT_PDBS "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/Plugin - ${BUILD_NAME}/${PROJECT_NAME}.pdb")
+    file(GLOB_RECURSE OUTPUT_PDBS "${CONTRIB_PROJECT_DIR}/${PROJECT_NAME}.pdb")
 endif()
-file(GLOB_RECURSE OUTPUT_JSONS "${CMAKE_CURRENT_SOURCE_DIR}/contrib/Distribution/Common/${PROJECT_NAME}.json")
+file(GLOB_RECURSE OUTPUT_JSONS "${CONTRIB_COMMON_DIR}/**.json")
 set_property(TARGET ${PROJECT_NAME}
-        APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${OUTPUT_DLLS}")
+        APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${OUTPUT_DLLS}"
+		APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${OUTPUT_JSONS}")
 if(${CMAKE_BUILD_TYPE} STREQUAL Debug OR ${CMAKE_BUILD_TYPE} STREQUAL RelWithDebInfo)
     set_property(TARGET ${PROJECT_NAME}
             APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${OUTPUT_PDBS}")
 endif()
-set_property(TARGET ${PROJECT_NAME}
-        APPEND PROPERTY ADDITIONAL_CLEAN_FILES "${OUTPUT_JSONS}")
 
 # Automatic deployment to Mod Organizer 2 mod directory.
 foreach (DEPLOY_TARGET $ENV{SkyrimPluginTargets})    #set your "SkyrimPluginTargets" environment variable to your MO2's Mods Folder
+        set(DEPLOY_TARGET_COMMON_DIR "${DEPLOY_TARGET}/${PROJECT_NAME} - ${CMAKE_BUILD_TYPE}/SKSE/Plugins/")        
+
         message("Adding deployment target ${DEPLOY_TARGET}.")
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${DEPLOY_TARGET}/${PROJECT_NAME} - ${CMAKE_BUILD_TYPE}/SKSE/Plugins/")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> "${DEPLOY_TARGET}/${PROJECT_NAME} - ${CMAKE_BUILD_TYPE}/SKSE/Plugins/")
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${DEPLOY_TARGET_COMMON_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${DEPLOY_TARGET_COMMON_DIR}/Make Them Slow or Fast Hints/"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CONTRIB_CONFIGURATION_DIR}/ExclusionHint.json" "${DEPLOY_TARGET_COMMON_DIR}/Make Them Slow or Fast Hints/"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CONTRIB_CONFIGURATION_DIR}/MainHint.json" "${DEPLOY_TARGET_COMMON_DIR}/Make Them Slow or Fast Hints/"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${PROJECT_NAME}> "${DEPLOY_TARGET_COMMON_DIR}/"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CONTRIB_CONFIGURATION_DIR}/${PROJECT_NAME}.json" "${DEPLOY_TARGET_COMMON_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${DEPLOY_TARGET}/Common For ${PROJECT_NAME}/SKSE/Plugins/"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CONTRIB_CONFIGURATION_DIR}/My Config/${PROJECT_NAME}.json" "${DEPLOY_TARGET}/Common For ${PROJECT_NAME}/SKSE/Plugins/")
         if(${CMAKE_BUILD_TYPE} STREQUAL Debug OR ${CMAKE_BUILD_TYPE} STREQUAL RelWithDebInfo)
                 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_PDB_FILE:${PROJECT_NAME}> "${DEPLOY_TARGET}/${PROJECT_NAME} - ${CMAKE_BUILD_TYPE}/SKSE/Plugins/")
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_PDB_FILE:${PROJECT_NAME}> "${DEPLOY_TARGET_COMMON_DIR}/")
         endif()
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/Configuration/${PROJECT_NAME}.json" "${DEPLOY_TARGET}/${PROJECT_NAME} - ${CMAKE_BUILD_TYPE}/SKSE/Plugins/")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${DEPLOY_TARGET}/Common For ${PROJECT_NAME}/SKSE/Plugins/")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/Configuration/My Config/${PROJECT_NAME}.json" "${DEPLOY_TARGET}/Common For ${PROJECT_NAME}/SKSE/Plugins/")
 endforeach()
 
-#adding a define for NDEBUG for future uses(if any)
-if(${CMAKE_BUILD_TYPE} STREQUAL Debug OR ${CMAKE_BUILD_TYPE} STREQUAL RelWithDebInfo)
-    add_definitions(-DNDEBUG)
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/skse-fomod.cmake)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/compress-artifact.cmake)
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/automatic-github-workflow-setup.cmake)

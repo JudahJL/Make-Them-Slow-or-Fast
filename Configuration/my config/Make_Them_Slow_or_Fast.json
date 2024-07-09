@@ -1,6 +1,9 @@
 {
   "Logging": {
-    "LogLevel": "trace"
+    "LogLevel": "debug"
+  },
+  "User Details": {
+    "Username": "NoName365"
   },
   "Aimed": {
     "Enable": true,
@@ -10,24 +13,24 @@
         "Speed": 1000.0
       },
       "Limit Speed": {
-        "Enable": true,
+        "Enable": false,
         "Min": 10.0,
         "Max": 1000.0
       },
-      "Change Gravity": {
+      "Randomize Speed": {
         "Enable": true,
+        "Min": 3000.0,
+        "Max": 12000.0
+      },
+      "Change Gravity": {
+        "Enable": false,
         "Gravity": 1.0
       },
       "Limit Gravity": {
-        "Enable": true,
+        "Enable": false,
         "Min": 0.0,
         "Max": 3.0
       }
     }
-  },
-  "Redo": {
-    "Enable": false,
-    "Key for repatching spells": 75,
-    "Key for Reseting spells": 77
   }
 }
