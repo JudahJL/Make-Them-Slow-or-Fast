@@ -32,6 +32,8 @@ set(WORKFLOW_FILE_DATA
     "\n"
     "    steps:\n"
     "    - uses: actions/checkout@v4\n"
+    "      with:\n"
+    "        submodules: true\n"
     "\n"
     "    - name: Setup cmake\n"
     "      uses: lukka/get-cmake@latest\n"
