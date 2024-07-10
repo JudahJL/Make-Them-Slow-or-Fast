@@ -104,7 +104,7 @@ message("\tTesting: ${TESTING}")
 set(PROJECT_AUTHOR "NoName365")
 
 add_subdirectory(”${CMAKE_CURRENT_SOURCE_DIR}/extern/CommonLibSSE-NG")
-include($ENV{CMAKE_CURRENT_SOURCE_DIR}/extern/CommonLibSSE-NG/cmake/CommonLibSSE.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/extern/CommonLibSSE-NG/cmake/CommonLibSSE.cmake)
 # find_package(CommonLibSSE CONFIG REQUIRED)
 include(FetchContent)
 
