@@ -1,240 +1,154 @@
 #include "DataManager.h"
+#include "logging.h"
 #include "utils.h"
 
-MTSOF::DataManager* MTSOF::DataManager::GetSingleton()
+DataManager* DataManager::GetSingleton()
 {
 	static DataManager Singleton;
 	return std::addressof(Singleton);
 }
 
-void MTSOF::DataManager::LoadJson(bool calledAtRuntime, std::shared_ptr<spdlog::logger> refresh)
+void DataManager::LoadMainJson()
 {
-	std::ifstream jsonfile(std::format("Data/SKSE/Plugins/{}.json", SKSE::PluginDeclaration::GetSingleton()->GetName()));
+	std::lock_guard<std::mutex> lock(_lock);
+	std::ifstream               MainJsonFile(std::format("Data/SKSE/Plugins/{}.json", SKSE::PluginDeclaration::GetSingleton()->GetName()));
 
 	try {
-		_jsonData = nJson::parse(jsonfile);
-	} catch (const nJson::parse_error e) {
-		std::string data[2]{ std::format("Data/SKSE/Plugins/{}.json parsing error : {}", SKSE::PluginDeclaration::GetSingleton()->GetName(), e.what()),
-			std::format("loading default {}.json", SKSE::PluginDeclaration::GetSingleton()->GetName()) };
+		MainJsonFile >> _MainJsonData;
+	} catch (const ordered_nJson::parse_error& e) {
+		logger::error("Data/SKSE/Plugins/{}.json parsing error : {}", SKSE::PluginDeclaration::GetSingleton()->GetName(), e.what());
+		logger::error("loading default {}.json", SKSE::PluginDeclaration::GetSingleton()->GetName());
 
-		if (calledAtRuntime) {
-			logger::error("{}", data[0]);
-			logger::error("{}", data[1]);
-		} else {
-			refresh->error("{}", data[0]);
-			refresh->error("{}", data[1]);
-		}
-		Utils::customMessageBox(std::format("{}. Are you sure you want to continue? if you continue, The error will be logged and a default json will be used instead.", e.what()));
-		_jsonData = R"({"Logging":{"LogLevel":"info"},"Aimed":{"Enable":true,"Fire and Forget":{"Change Speed":{"Enable":true,"Speed":1000.0},"Limit Speed":{"Enable":false,"Min":10.0,"Max":1000.0},"Change Gravity":{"Enable":false,"Gravity":1.0},"Limit Gravity":{"Enable":false,"Min":0.0,"Max":3.0}}},"Redo":{"Enable":false,"Key for repatching spells":75,"Key for Reseting spells":77}})"_json;
+		InlineUtils::customMessageBox(std::format("{}. Are you sure you want to continue? if you continue, The error will be logged and a default json will be used instead.", e.what()));
+		_MainJsonData = {
+			{ "Logging", { { "LogLevel", "info" } } },
+			{ "User Details", { { "Username", "User" } } },
+			{ "Aimed", { { "Enable", true },
+						   { "Fire and Forget",
+							   { "Change Speed", { { "Enable", true },
+													 { "Speed", 1000.0f } } },
+							   { "Limit Speed", { { "Enable", false },
+													{ "Min", 10.0f },
+													{ "Max", 1000.0f } } },
+							   { "Randomize Speed", { { "Enable", true },
+														{ "Min", 3000.0f },
+														{ "Max", 12000.0f } } },
+							   { "Change Gravity", { { "Enable", false },
+													   { "Gravity", 1.0f } } },
+							   { "Limit Gravity", { { "Enable", false },
+													  { "Min", 0.0f },
+													  { "Max", 3.0f } } } } } }
+		};
 	}
-	const char* stringData[16]{ "Aimed", "Enable", "Fire and Forget", "Change Speed", "Speed", "Limit Speed", "Min", "Max", "Change Gravity", "Gravity", "Limit Gravity", "Key for Reseting spells", "Key for repatching spells", "Redo", "Logging", "LogLevel" };
+}
+
+void DataManager::LoadExclusionJsonFiles()
+{
 	try {
-		_enableAimed = _jsonData[stringData[0]][stringData[1]].get<bool>();
-		_changeAimedFireForgetSpeedEnable = _jsonData[stringData[0]][stringData[2]][stringData[3]][stringData[1]].get<bool>();
-		_aimedFireForgetSpeed = _jsonData[stringData[0]][stringData[2]][stringData[3]][stringData[4]].get<float>();
-		_limitAimedFireForgetSpeedEnable = _jsonData[stringData[0]][stringData[2]][stringData[5]][stringData[1]].get<bool>();
-		_limitAimedFireForgetSpeedMin = _jsonData[stringData[0]][stringData[2]][stringData[5]][stringData[6]].get<float>();
-		_limitAimedFireForgetSpeedMax = _jsonData[stringData[0]][stringData[2]][stringData[5]][stringData[7]].get<float>();
-
-		_changeAimedFireForgetGravityEnable = _jsonData[stringData[0]][stringData[2]][stringData[8]][stringData[1]].get<bool>();
-		_aimedFireForgetGravity = _jsonData[stringData[0]][stringData[2]][stringData[8]][stringData[9]].get<float>();
-		_limitAimedFireForgetGravityEnable = _jsonData[stringData[0]][stringData[2]][stringData[10]][stringData[1]].get<bool>();
-		_limitAimedFireForgetGravityMin = _jsonData[stringData[0]][stringData[2]][stringData[10]][stringData[6]].get<float>();
-		_limitAimedFireForgetGravityMax = _jsonData[stringData[0]][stringData[2]][stringData[10]][stringData[7]].get<float>();
-		_redo = _jsonData[stringData[13]][stringData[1]].get<bool>();
-		_keyForRefresh = _jsonData[stringData[13]][stringData[12]].get<int>();
-		_keyForReset = _jsonData[stringData[13]][stringData[11]].get<int>();
-		_logLevelStr = _jsonData[stringData[14]][stringData[15]].get<std::string>();
-
-		if (_logLevelStr == "trace")
-			_logLevel = spdlog::level::trace;
-		else if (_logLevelStr == "debug")
-			_logLevel = spdlog::level::debug;
-		else if (_logLevelStr == "info")
-			_logLevel = spdlog::level::info;
-		else if (_logLevelStr == "warn")
-			_logLevel = spdlog::level::warn;
-		else if (_logLevelStr == "err")
-			_logLevel = spdlog::level::err;
-		else if (_logLevelStr == "critical")
-			_logLevel = spdlog::level::critical;
-		else
-			_logLevel = spdlog::level::info;
-
-		auto defaultLogger = spdlog::default_logger();
-		defaultLogger->set_level(_logLevel);
-		defaultLogger->flush_on(_logLevel);
-		refresh->set_level(_logLevel);
-		refresh->flush_on(_logLevel);
-
-
-		if (fs::exists(_folder_path) && !fs::is_empty(_folder_path)) {
+		if (fs::exists(_FolderPath) && !fs::is_empty(_FolderPath)) {
 			_hasFilesToMerge = true;
-			for (const auto& entry : fs::directory_iterator(_folder_path)) {
-				if (entry.path().extension() == ".json") {
-					std::ifstream jFile(entry.path());
-					try {
-						_mergeData = nJson::parse(jFile);
-					} catch (const nJson::parse_error e) {
-						{
-							Utils::customMessageBox(std::format("{}. Are you sure you want to continue? if you continue, {} will be ignored and the error will be logged.", e.what(), entry.path().generic_string()));
-							std::string data[2]{ std::format("{} parsing error : {}", entry.path().generic_string(), e.what()), std::format("If you get this error, check your {}. The line above will tell where the mistake is.", entry.path().generic_string()) };
-							if (calledAtRuntime) {
-								logger::error("{}", data[0]);
-								logger::error("{}", data[1]);
-							} else {
-								refresh->error("{}", data[0]);
-								refresh->error("{}", data[1]);
-							}
-						}
-					}
-					std::string data = std::format("Loaded JSON from file: {}", entry.path().generic_string());
-					if (calledAtRuntime)
-						logger::debug("{}", data);
-					else
-						refresh->debug("{}", data);
+			for (const auto& entry : fs::directory_iterator(_FolderPath)) {
+				fs::path entry_path = entry.path();
 
-					const char* data1{ "SPELL FormID to Exclude" };
-					const char* data2{ "SPELL File(s) to Exclude" };
-					_formIDArray.insert(_formIDArray.end(), _mergeData[data1].begin(), _mergeData[data1].end());
-					_tesFileArray.insert(_tesFileArray.end(), _mergeData[data2].begin(), _mergeData[data2].end());
+				while (fs::is_symlink(entry_path)) {
+					entry_path = fs::read_symlink(entry_path);
+				}
+
+				if (fs::is_regular_file(entry_path) && entry_path.extension() == ".json") {
+					std::string EntryPathStr(fs::absolute(entry_path).generic_string());
+
+					std::ifstream jFile(entry_path);
+
+					if (!jFile.is_open()) {
+						logger::error("Failed to open file: {}", EntryPathStr);
+						continue;
+					}
+
+					ordered_nJson MergeJsonData;
+					try {
+						jFile >> MergeJsonData;
+					} catch (const ordered_nJson::parse_error& e) {
+						std::string_view ErrorMessage(e.what());
+						logger::error("{}:{}", EntryPathStr, ErrorMessage);
+						logger::error("If you get this error, check your {}. The line above will tell where the mistake is.", EntryPathStr);
+						InlineUtils::customMessageBox(std::format("{}. Are you sure you want to continue? if you continue, {} will be ignored and the error will be logged.", ErrorMessage, EntryPathStr));
+					}
+
+					logger::debug("Loaded JSON from file: {}", EntryPathStr);
+
+					constexpr static const char* data1{ "SPELL FormID to Exclude" };
+					constexpr static const char* data2{ "SPELL File(s) to Exclude" };
+
+					for (const std::string& a : MergeJsonData[data1]) _FormIDArray.insert(a);
+					for (const std::string& a : MergeJsonData[data2]) _TESFileArray.insert(a);
 				}
 			}
 		}
 
-		if (_hasFilesToMerge) {
-			std::sort(_formIDArray.begin(), _formIDArray.end());
-			_formIDArray.erase(std::unique(_formIDArray.begin(), _formIDArray.end()), _formIDArray.end());
-			std::sort(_tesFileArray.begin(), _tesFileArray.end());
-			_tesFileArray.erase(std::unique(_tesFileArray.begin(), _tesFileArray.end()), _tesFileArray.end());
-		}
-
-	}
-	catch (const nJson::exception& e) {
-		if (calledAtRuntime)
-			logger::error("{}", e.what());
-		else
-			refresh->error("{}", e.what());
-		Utils::customMessageBox(std::format("{}. Want to Continue?", e.what()));
+	} catch (const ordered_nJson::type_error& e) {
+		logger::error("{}", e.what());
+		InlineUtils::customMessageBox(std::format("{}. Want to Continue?", e.what()));
+	} catch (const ordered_nJson::other_error& e) {
+		logger::error("{}", e.what());
+		InlineUtils::customMessageBox(std::format("{}. Want to Continue?", e.what()));
+	} catch (const ordered_nJson::exception& e) {
+		logger::error("{}", e.what());
+		InlineUtils::customMessageBox(std::format("{}. Want to Continue?", e.what()));
 	}
 
-	std::string data[17]{
-		std::format("************************************No Exclusion will be Done**************************************"),  //0
-		std::format("*************************************Finished Processing Data**************************************"),  //1
-		std::format("Aimed :"),                                                                                              //2
-		std::format("\tEnabled : {} ;this is a ultimate kill switch for all aimed spells", _enableAimed),                    //3
-		std::format("\tChange Speed : {}", _changeAimedFireForgetSpeedEnable),                                               //4
-		std::format("\tNew Speed Value : {}", _aimedFireForgetSpeed),                                                        //5
-		std::format("\tChange Gravity : {}", _changeAimedFireForgetGravityEnable),                                           //6
-		std::format("\tNew Gravity Value : {}", _aimedFireForgetSpeed),                                                      //7
-		std::format("\tLimit Speed : {}", _limitAimedFireForgetSpeedEnable),                                                 //8
-		std::format("\tSpeed Min : {}", _limitAimedFireForgetSpeedMin),                                                      //9
-		std::format("\tSpeed Max : {}", _limitAimedFireForgetSpeedMax),                                                      //10
-		std::format("\tLimit Gravity : {}", _limitAimedFireForgetGravityEnable),                                             //11
-		std::format("\tGravity Min : {}", _limitAimedFireForgetGravityMin),                                                  //12
-		std::format("\tGravity Max : {}", _limitAimedFireForgetGravityMax),                                                  //13
-		std::format("\tKey for Repatching spells : {}", _keyForRefresh),                                                     //14
-		std::format("\tKey for reloading original values : {}", _keyForReset),                                               //15
-		std::format("\tEnable Redo : {}", _redo)
-	};
-	if (!(_hasFilesToMerge)) {
-		if (calledAtRuntime)
-			logger::info("{}", data[0]);
-		else
-			refresh->info("{}", data[0]);
-	}
-
-	if (calledAtRuntime) {
-		if (!(_hasFilesToMerge))
-			logger::info("{}", data[0]);
-		logger::info("{}", data[1]);
-		logger::info("{}", _starredString);
-		logger::info("{}", data[2]);
-		logger::info("{}", data[3]);
-		logger::info("{}", data[4]);
-		logger::info("{}", data[5]);
-		logger::info("{}", data[8]);
-		logger::info("{}", data[9]);
-		logger::info("{}", data[10]);
-		logger::info("{}", data[6]);
-		logger::info("{}", data[7]);
-		logger::info("{}", data[11]);
-		logger::info("{}", data[12]);
-		logger::info("{}", data[13]);
-		logger::info("{}", data[16]);
-		logger::info("{}", data[14]);
-		logger::info("{}", data[15]);
-		logger::info("{}", _starredString);
-	} else {
-		if (!(_hasFilesToMerge))
-			refresh->info("{}", data[0]);
-		refresh->info("{}", data[1]);
-		refresh->info("{}", _starredString);
-		refresh->info("{}", data[2]);
-		refresh->info("{}", data[3]);
-		refresh->info("{}", data[4]);
-		refresh->info("{}", data[5]);
-		refresh->info("{}", data[8]);
-		refresh->info("{}", data[9]);
-		refresh->info("{}", data[10]);
-		refresh->info("{}", data[6]);
-		refresh->info("{}", data[7]);
-		refresh->info("{}", data[11]);
-		refresh->info("{}", data[12]);
-		refresh->info("{}", data[13]);
-		refresh->info("{}", data[16]);
-		refresh->info("{}", data[14]);
-		refresh->info("{}", data[15]);
-		refresh->info("{}", _starredString);
-	}
+	if (!(_hasFilesToMerge))
+		logger::info("************************************No Exclusion will be Done**************************************");
 }
 
-void MTSOF::DataManager::spellPatch(bool calledAtKDataLoaded, std::shared_ptr<spdlog::logger> refresh)
+void DataManager::PatchSpells()
 {
-	auto startSP = std::chrono::high_resolution_clock::now();
+	std::lock_guard<std::mutex> lock(_lock);
+	_DonePatchingSpells = false;
+	constexpr const char*   _starredString{ "***************************************************************************************************" };
+	ordered_nJson           j;
+	std::chrono::time_point startSP = std::chrono::high_resolution_clock::now();
 	if (_enableAimed) {
 		for (const auto* spell : RE::TESDataHandler::GetSingleton()->GetFormArray<RE::SpellItem>()) {
-			if (spell && spell != nullptr) {
+			j.clear();
+			if (spell) {
+				j["ModName"] = spell->GetFile()->GetFilename();                                                          //ModName
+				j["SpellName"] = spell->GetFullName();                                                                   //SpellName
+				j["SpellFormID"] = spell->GetRawFormID();                                                                //SpellFormID
+				j["SpellString"] = InlineUtils::GetStringFromFormIDAndModName(spell->GetRawFormID(), spell->GetFile());  //SpellString
+				j["ProjFormID"] = nullptr;                                                                               //ProjFormID
+				j["ProjSpeed"] = nullptr;                                                                                //ProjSpeed
+				j["ProjGravity"] = nullptr;                                                                              //ProjGravity
 				auto* spellEffectSetting = spell->GetAVEffect();
-				if (spellEffectSetting && spellEffectSetting != nullptr) {
+				if (spellEffectSetting) {
+					spellEffectSetting;
 					auto* spellProjectile = spellEffectSetting->data.projectileBase;
-					if (spellProjectile && spellProjectile != nullptr) {
+					if (spellProjectile) {
+						j["ProjFormID"] = spellProjectile->GetRawFormID();  //ProjFormID
+						j["ProjSpeed"] = spellProjectile->data.speed;       //ProjSpeed
+						j["ProjGravity"] = spellProjectile->data.gravity;   //ProjGravity
 						bool shouldPatch = true;
 						if (_hasFilesToMerge) {
-							for (const std::string spellModName : _tesFileArray) {
-								if (spellModName.c_str() == spell->GetFile()->GetFilename()) {
+							for (const std::string_view spellModName : _TESFileArray) {
+								if (spellModName == spell->GetFile()->GetFilename()) {
 									shouldPatch = false;
-									std::string data =
-										std::format("Skipping Spell : Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(), spell->GetRawFormID(),
-											spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
-									if (calledAtKDataLoaded) {
-										logger::debug("{}", _starredString);
-										logger::debug("{}", data);
-										logger::debug("{}", _starredString);
-									} else {
-										refresh->debug("{}", _starredString);
-										refresh->debug("{}", data);
-										refresh->debug("{}", _starredString);
-									}
+
+									logger::debug("{}", _starredString);
+									logger::debug("Skipping Spell : Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(), spell->GetRawFormID(),
+										spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
+									logger::debug("{}", _starredString);
 									break;
 								}
 							}
 							if (shouldPatch) {
-								for (const std::string spellFormID : _formIDArray) {
+								for (const std::string& spellFormID : _FormIDArray) {
 									auto formID = InlineUtils::GetFormIDFromIdentifier(spellFormID);
-									if (formID && spell->GetFormID() == formID) {
+									if (spell->GetFormID() == formID) {
 										shouldPatch = false;
-										std::string data = std::format("Skipping Spell : Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(), formID,
+
+										logger::debug("{}", _starredString);
+										logger::debug("Skipping Spell : Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(), formID,
 											spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
-										if (calledAtKDataLoaded) {
-											logger::debug("{}", _starredString);
-											logger::debug("{}", data);
-											logger::debug("{}", _starredString);
-										} else {
-											refresh->debug("{}", _starredString);
-											refresh->debug("{}", data);
-											refresh->debug("{}", _starredString);
-										}
+										logger::debug("{}", _starredString);
 										break;
 									}
 								}
@@ -245,69 +159,40 @@ void MTSOF::DataManager::spellPatch(bool calledAtKDataLoaded, std::shared_ptr<sp
 							if (spell && (spell->data.spellType == RE::MagicSystem::SpellType::kSpell)) {
 								auto delivery = spell->data.delivery;
 								auto casttype = spell->data.castingType;
-								bool ammoPatched = false;
+								bool SpellPatched = false;
 								if (_changeAimedFireForgetSpeedEnable || _limitAimedFireForgetSpeedEnable || _changeAimedFireForgetGravityEnable || _limitAimedFireForgetGravityEnable)
-									ammoPatched = true;
+									SpellPatched = true;
 								if ((delivery == RE::MagicSystem::Delivery::kAimed) && (casttype == RE::MagicSystem::CastingType::kFireAndForget)) {
-									if ((_enableAimed) && ammoPatched) {
-										std::string data =
-											std::format("Original Aimed,Fire And Forget Spell : Full Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(),
-												spell->GetRawFormID(), spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
-										if (calledAtKDataLoaded) {
-											logger::debug("{}", _starredString);
-											logger::debug("{}", data);
-										} else {
-											refresh->debug("{}", _starredString);
-											refresh->debug("{}", data);
-										}
+									if (SpellPatched) {
+										logger::debug("{}", _starredString);
+										logger::debug("Original Aimed,Fire And Forget Spell : Full Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(),
+											spell->GetRawFormID(), spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
 									}
 									if (_changeAimedFireForgetSpeedEnable) {
 										spellProjectile->data.speed = _aimedFireForgetSpeed;
-										const char* data{ "modified speed" };
-										if (calledAtKDataLoaded) {
-											logger::debug("{}", data);
-										} else {
-											refresh->debug("{}", data);
-										}
+										logger::debug("modified speed");
 									}
 									if (_limitAimedFireForgetSpeedEnable) {
-										spellProjectile->data.speed = InlineUtils::limitFloat(spellProjectile->data.speed, _limitAimedFireForgetSpeedMin, _limitAimedFireForgetSpeedMax);
-										const char* data{ "limited speed" };
-										if (calledAtKDataLoaded) {
-											logger::debug("{}", data);
-										} else {
-											refresh->debug("{}", data);
-										}
+										InlineUtils::limit(spellProjectile->data.speed, _limitAimedFireForgetSpeedMin, _limitAimedFireForgetSpeedMax);
+										logger::debug("limited speed");
+									}
+									if (_RandomizeAimedFireForgetSpeedEnable) {
+										float speed = InlineUtils::getRandom(_RandomizeAimedFireForgetSpeedMin, _RandomizeAimedFireForgetSpeedMax);
+										spellProjectile->data.speed = speed;
+										logger::debug("Randomized Speed to {}", speed);
 									}
 									if (_changeAimedFireForgetGravityEnable) {
 										spellProjectile->data.gravity = _aimedFireForgetGravity;
-										const char* data{ "modified gravity" };
-										if (calledAtKDataLoaded) {
-											logger::debug("{}", data);
-										} else {
-											refresh->debug("{}", data);
-										}
+										logger::debug("modified gravity");
 									}
 									if (_limitAimedFireForgetGravityEnable) {
-										spellProjectile->data.gravity = InlineUtils::limitFloat(spellProjectile->data.gravity, _limitAimedFireForgetGravityMin, _limitAimedFireForgetGravityMax);
-										const char* data{ "limited gravity" };
-										if (calledAtKDataLoaded) {
-											logger::debug("{}", data);
-										} else {
-											refresh->debug("{}", data);
-										}
+										InlineUtils::limit(spellProjectile->data.gravity, _limitAimedFireForgetGravityMin, _limitAimedFireForgetGravityMax);
+										logger::debug("limited gravity");
 									}
-									if ((_enableAimed) && ammoPatched) {
-										std::string data =
-											std::format("Modified Aimed,Fire And Forget Spell : Full Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(),
-												spell->GetRawFormID(), spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
-										if (calledAtKDataLoaded) {
-											logger::debug("{}", data);
-											logger::debug("{}", _starredString);
-										} else {
-											refresh->debug("{}", data);
-											refresh->debug("{}", _starredString);
-										}
+									if (SpellPatched) {
+										logger::debug("Modified Aimed,Fire And Forget Spell : Full Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(),
+											spell->GetRawFormID(), spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
+										logger::debug("{}", _starredString);
 									}
 								}
 							}
@@ -315,42 +200,181 @@ void MTSOF::DataManager::spellPatch(bool calledAtKDataLoaded, std::shared_ptr<sp
 					}
 				}
 			}
+			if ( !j.empty() ) _SpellInfo.push_back(j);
 		}
 	}
-	std::string data = std::format("{} {} Finished Patching.", SKSE::PluginDeclaration::GetSingleton()->GetName(), SKSE::PluginDeclaration::GetSingleton()->GetVersion().string());
-	if (calledAtKDataLoaded)
-		logger::info("{}", data);
-	else
-		refresh->info("{}", data);
 
-	#ifdef NDEBUG
-	if (calledAtKDataLoaded) {
-		for (decltype(_formIDArray.size()) i = 0; i <_formIDArray.size();i++)
-			logger::debug("_formIDArray[{}] : {}", i, _formIDArray[i]);
-		for (decltype(_tesFileArray.size()) i = 0; i < _tesFileArray.size(); i++)
-			logger::debug("_tesFileArray[{}] : {}", i, _tesFileArray[i]);
+	logger::info("{} {} Finished Patching.", SKSE::PluginDeclaration::GetSingleton()->GetName(), SKSE::PluginDeclaration::GetSingleton()->GetVersion().string("."));
+
+#ifdef TESTING
+	size_t size{ 0sz };
+	for (const std::string_view s : _FormIDArray) {
+		logger::debug("_FormIDArray[{}] : {}", size, s);
+		size++;
+	}
+	size = 0sz;
+	for (const std::string_view s : _TESFileArray) {
+		logger::debug("_TESFileArray[{}] : {}", size, s);
+		size++;
+	}
+#endif
+	_SpellModFiles.clear();
+
+	for (auto& item : _SpellInfo) _SpellModFiles.push_back(item["ModName"].get<std::string>());
+
+	InlineUtils::RemoveAnyDuplicates(_SpellModFiles);
+
+	_DonePatchingSpells = true;
+
+	std::chrono::nanoseconds nanosecondsTakenForSP = std::chrono::duration(std::chrono::high_resolution_clock::now() - startSP);
+
+	logger::info("Time Taken in DataManager::PatchSpells() totally is {} nanoseconds or {} microseconds or {} milliseconds or {} seconds or {} minutes", nanosecondsTakenForSP.count(),
+		std::chrono::duration_cast<std::chrono::microseconds>(nanosecondsTakenForSP).count(), std::chrono::duration_cast<std::chrono::milliseconds>(nanosecondsTakenForSP).count(),
+		std::chrono::duration_cast<std::chrono::seconds>(nanosecondsTakenForSP).count(), std::chrono::duration_cast<std::chrono::minutes>(nanosecondsTakenForSP).count());
+}
+
+void DataManager::RevertToDefault()
+{
+	logger::info("");
+	logger::info("Starting to Revert");
+	if (!_SpellInfo.empty()) {
+		_DonePatchingSpells = false;
+		constexpr const char* starString = "******************************************************************************************************************************";
+
+		for (size_t i = 0sz; i < _SpellInfo.size(); i++) {
+			if (auto spell = InlineUtils::GetFormFromIdentifier<RE::SpellItem>(_SpellInfo[i]["SpellString"]); spell) {
+				if (auto SpellEffectSetting = spell->GetAVEffect(); SpellEffectSetting) {
+					if (auto SpellProjectile = SpellEffectSetting->data.projectileBase; SpellProjectile) {
+						if (spell->GetRawFormID() == _SpellInfo[i]["SpellFormID"].get<RE::FormID>() && SpellProjectile->GetRawFormID() == _SpellInfo[i]["ProjFormID"].get<RE::FormID>()) {
+							logger::debug("{}", starString);
+							logger::debug("Before Reverting : Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(), spell->GetRawFormID(),
+								SpellProjectile->GetFullName(), SpellProjectile->GetRawFormID(), SpellProjectile->data.speed, SpellProjectile->data.gravity, spell->GetFile()->GetFilename());
+							SpellProjectile->data.speed = _SpellInfo[i]["ProjSpeed"].get<float>();
+							SpellProjectile->data.gravity = _SpellInfo[i]["ProjGravity"].get<float>();
+							logger::debug("After Reverting : Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(), spell->GetRawFormID(),
+								SpellProjectile->GetFullName(), SpellProjectile->GetRawFormID(), SpellProjectile->data.speed, SpellProjectile->data.gravity, spell->GetFile()->GetFilename());
+							logger::debug("{}", starString);
+						}
+					}
+				}
+			}
+		}
+	}
+	_DonePatchingSpells = true;
+	logger::info("Finished Reverting");
+	logger::info("");
+}
+
+void DataManager::ReloadLoggingIfNecessary(const std::string_view& LogLevelStr)
+{
+
+	const static std::unordered_map<std::string_view, spdlog::level::level_enum> logLevelMap{
+		{ "trace"sv, spdlog::level::trace },
+		{ "debug"sv, spdlog::level::debug },
+		{ "info"sv, spdlog::level::info },
+		{ "warn"sv, spdlog::level::warn },
+		{ "err"sv, spdlog::level::err },
+		{ "critical"sv, spdlog::level::critical },
+		{ "off"sv, spdlog::level::off }
+	};
+	constexpr static const char* Pattern{ "[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] [%t] [%s:%#] %v" };
+
+	auto it = logLevelMap.find(LogLevelStr);
+	if (it != logLevelMap.end()) {
+		spdlog::level::level_enum newLevel = it->second;
+
+		if (newLevel != spdlog::level::off) {
+			if (spdlog::default_logger()->sinks().empty()) {
+        logger::info("Spdlog Sinks are empty. Creating new sinks on log level: {}", LogLevelStr);
+				Logging logger(newLevel);
+			} else {
+				spdlog::set_level(newLevel);
+				spdlog::flush_on(newLevel);
+				spdlog::set_pattern(Pattern);
+			}
+		} else {
+			spdlog::default_logger()->sinks().clear();
+			spdlog::set_pattern("");
+		}
 	} else {
-		for (decltype(_formIDArray.size()) i = 0; i < _formIDArray.size(); i++)
-			refresh->debug("_formIDArray[{}] : {}", i, _formIDArray[i]);
-		for (decltype(_tesFileArray.size()) i = 0; i < _tesFileArray.size(); i++)
-			refresh->debug("_tesFileArray[{}] : {}", i, _tesFileArray[i]);
+		logger::error("Invalid log level: {}. Defaulting to info.", LogLevelStr);
+		if (spdlog::default_logger()->sinks().empty()) {
+      logger::info("Spdlog Sinks are empty. Creating new sinks on log level: info");
+			Logging logger(spdlog::level::info);
+		} else {
+			spdlog::set_level(spdlog::level::info);
+			spdlog::flush_on(spdlog::level::info);
+			spdlog::set_pattern(Pattern);
+		}
 	}
-	#endif
+}
 
-	if (!_jsonData.empty())
-		_jsonData.clear();
-	if (!_formIDArray.empty())
-		_formIDArray.clear();
-	if (!_tesFileArray.empty())
-		_tesFileArray.clear();
-	auto nanosecondsTakenForSP = std::chrono::duration(std::chrono::high_resolution_clock::now() - startSP);
-	{
-		std::string data1{ std::format("Time Taken in ammo_patch() totally is {} nanoseconds or {} microseconds or {} milliseconds or {} seconds or {} minutes", nanosecondsTakenForSP.count(),
-			std::chrono::duration_cast<std::chrono::microseconds>(nanosecondsTakenForSP).count(), std::chrono::duration_cast<std::chrono::milliseconds>(nanosecondsTakenForSP).count(),
-			std::chrono::duration_cast<std::chrono::seconds>(nanosecondsTakenForSP).count(), std::chrono::duration_cast<std::chrono::minutes>(nanosecondsTakenForSP).count()) };
-		if (calledAtKDataLoaded)
-			logger::info("{}", data1);
-		else
-			refresh->info("{}", data1);
-	}
+void DataManager::ProcessMainJson()
+{  //                                             0           1          2            3             4               5             6            7       8       9          10                   11          12                13
+	constexpr const char* MainJsonKeys[]{ "User Details", "Username", "Aimed", "Enable", "Fire and Forget", "Change Speed", "Speed", "Limit Speed", "Min", "Max", "Randomize Speed", "Change Gravity", "Gravity", "Limit Gravity" };
+
+	ordered_nJson Aimed = _MainJsonData[MainJsonKeys[2]];  //Aimed
+
+	ordered_nJson AimedFireForget = Aimed[MainJsonKeys[4]];  //Fire And Forget for Aimed
+
+	ordered_nJson AimedFireForgetCS = AimedFireForget[MainJsonKeys[5]];   //CS == Change Speed
+	ordered_nJson AimedFireForgetLS = AimedFireForget[MainJsonKeys[7]];   //LS == Limit Speed
+	ordered_nJson AimedFireForgetRS = AimedFireForget[MainJsonKeys[10]];  //RS == Randomize Speed
+	ordered_nJson AimedFireForgetCG = AimedFireForget[MainJsonKeys[11]];  //CG == Change Gravity
+	ordered_nJson AimedFireForgetLG = AimedFireForget[MainJsonKeys[13]];  //LS == Limit Gravity
+
+	//Enable
+	constexpr auto Enable{ 3 };
+	_enableAimed = Aimed[MainJsonKeys[Enable]].get<bool>();
+	_changeAimedFireForgetSpeedEnable = AimedFireForgetCS[MainJsonKeys[Enable]].get<bool>();
+	_limitAimedFireForgetSpeedEnable = AimedFireForgetLS[MainJsonKeys[Enable]].get<bool>();
+	_RandomizeAimedFireForgetSpeedEnable = AimedFireForgetRS[MainJsonKeys[Enable]].get<bool>();
+	_changeAimedFireForgetGravityEnable = AimedFireForgetCG[MainJsonKeys[Enable]].get<bool>();
+	_limitAimedFireForgetGravityEnable = AimedFireForgetLG[MainJsonKeys[Enable]].get<bool>();
+
+	//Speed
+	constexpr auto Speed{ 6 };
+	_aimedFireForgetSpeed = AimedFireForgetCS[MainJsonKeys[Speed]].get<float>();
+
+	//Gravity
+	constexpr auto Gravity{ 12 };
+	_aimedFireForgetGravity = AimedFireForgetCG[MainJsonKeys[Gravity]].get<float>();
+
+	//Min
+	constexpr auto Min{ 8 };
+	_limitAimedFireForgetSpeedMin = AimedFireForgetLS[MainJsonKeys[Min]].get<float>();
+	_RandomizeAimedFireForgetSpeedMin = AimedFireForgetRS[MainJsonKeys[Min]].get<float>();
+	_limitAimedFireForgetGravityMin = AimedFireForgetLG[MainJsonKeys[Min]].get<float>();
+
+	//Max
+	constexpr auto Max{ 9 };
+	_limitAimedFireForgetSpeedMax = AimedFireForgetLS[MainJsonKeys[Max]].get<float>();
+	_RandomizeAimedFireForgetSpeedMax = AimedFireForgetRS[MainJsonKeys[Max]].get<float>();
+	_limitAimedFireForgetGravityMax = AimedFireForgetLG[MainJsonKeys[Max]].get<float>();
+
+	//UserName
+	_UserName = _MainJsonData["User Details"]["Username"].get<std::string>();
+}
+
+void DataManager::LogDataManagerContents()
+{
+	std::lock_guard<std::mutex> lock(_lock);
+	constexpr const char*       StarredString{ "***************************************************************************************************" };
+	logger::info("Aimed :");
+	logger::info("{}", StarredString);
+	logger::info("\tEnabled : {}", _enableAimed);
+	logger::info("\tChange Speed : {}", _changeAimedFireForgetSpeedEnable);
+	logger::info("\tNew Speed Value : {}", _aimedFireForgetSpeed);
+	logger::info("\tChange Gravity : {}", _changeAimedFireForgetGravityEnable);
+	logger::info("\tNew Gravity Value : {}", _aimedFireForgetSpeed);
+	logger::info("\tLimit Speed : {}", _limitAimedFireForgetSpeedEnable);
+	logger::info("\tSpeed Min : {}", _limitAimedFireForgetSpeedMin);
+	logger::info("\tSpeed Max : {}", _limitAimedFireForgetSpeedMax);
+	logger::info("\tRandomize Speed: {}", _RandomizeAimedFireForgetSpeedEnable);
+	logger::info("\tRandomize Min : {}", _RandomizeAimedFireForgetSpeedMin);
+	logger::info("\tRandomize Max : {}", _RandomizeAimedFireForgetSpeedMax);
+	logger::info("\tLimit Gravity : {}", _limitAimedFireForgetGravityEnable);
+	logger::info("\tGravity Min : {}", _limitAimedFireForgetGravityMin);
+	logger::info("\tGravity Max : {}", _limitAimedFireForgetGravityMax);
+	logger::info("{}", StarredString);
 }

@@ -2,6 +2,9 @@
   "Logging": {
     "LogLevel": "info"
   },
+  "User Details": {
+    "Username": "User"
+  },
   "Aimed": {
     "Enable": true,
     "Fire and Forget": {
@@ -14,6 +17,11 @@
         "Min": 10.0,
         "Max": 1000.0
       },
+      "Randomize Speed": {
+        "Enable": true,
+        "Min": 3000.0,
+        "Max": 12000.0
+      },
       "Change Gravity": {
         "Enable": false,
         "Gravity": 1.0
@@ -24,10 +32,5 @@
         "Max": 3.0
       }
     }
-  },
-  "Redo": {
-    "Enable": false,
-    "Key for repatching spells": 75,
-    "Key for Reseting spells": 77
   }
 }

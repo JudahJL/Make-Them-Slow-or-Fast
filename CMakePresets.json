@@ -65,6 +65,50 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "MinSizeRel"
       }
+    },
+    {
+      "name": "Debug - TESTING",
+      "inherits": [
+        "base"
+      ],
+      "displayName": "Debug - TESTING",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TESTING": "ON"
+      }
+    },
+    {
+      "name": "Release - TESTING",
+      "inherits": [
+        "base"
+      ],
+      "displayName": "Release - TESTING",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "TESTING": "ON"
+      }
+    },
+    {
+      "name": "RelWithDebInfo - TESTING",
+      "inherits": [
+        "base"
+      ],
+      "displayName": "RelWithDebInfo - TESTING",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "TESTING": "ON"
+      }
+    },
+    {
+      "name": "MinSizeRel - TESTING",
+      "inherits": [
+        "base"
+      ],
+      "displayName": "MinSizeRel - TESTING",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "MinSizeRel",
+        "TESTING": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -90,6 +134,30 @@
       "name": "MinSizeRel",
       "displayName": "MinSizeRel",
       "configurePreset": "MinSizeRel",
+      "description": ""
+    },
+    {
+      "name": "Debug - TESTING",
+      "displayName": "Debug - TESTING",
+      "configurePreset": "Debug - TESTING",
+      "description": ""
+    },
+    {
+      "name": "Release - TESTING",
+      "displayName": "Release - TESTING",
+      "configurePreset": "Release - TESTING",
+      "description": ""
+    },
+    {
+      "name": "RelWithDebInfo - TESTING",
+      "displayName": "RelWithDebInfo - TESTING",
+      "configurePreset": "RelWithDebInfo - TESTING",
+      "description": ""
+    },
+    {
+      "name": "MinSizeRel - TESTING",
+      "displayName": "MinSizeRel - TESTING",
+      "configurePreset": "MinSizeRel - TESTING",
       "description": ""
     }
   ]

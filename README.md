@@ -1,5 +1,5 @@
 # Make Them Slow or Fast - A spell Patcher
-A simple SKSE plugin to patch All AMMO at runtime. Supports All Runtimes.
+A simple SKSE plugin to patch All Aimed Fire and Forget Spells at runtime. Supports All Runtimes.
 
 - [NG](https://www.nexusmods.com/skyrimspecialedition/mods/109355)
 
