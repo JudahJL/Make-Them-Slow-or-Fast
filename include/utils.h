@@ -20,14 +20,15 @@ namespace InlineUtils
 				return dataHandler->LookupForm(formID, modName.c_str())->GetFormID();
 			}
 		}
-		return (FormID) nullptr;
+    logger::error("Couldn't resolve '{}' into valid FormID.");
+		return static_cast<FormID>(0);
 	}
 
 	[[nodiscard]] inline std::string GetStringFromFormIDAndModName(FormID formID, RE::TESFile* File)
 	{
 		bool        isLight = File->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
 		FormID      FormID = isLight ? formID & 0xFFF : formID & 0xFFFFFF;
-		std::string identifier = std::format("{}|{:08X}", File->GetFilename(), FormID);
+		std::string identifier = std::format("{}|{:#X}", File->GetFilename(), FormID);
 		return identifier;
 	}
 
