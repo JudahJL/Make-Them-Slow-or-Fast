@@ -109,8 +109,8 @@ void DataManager::PatchSpells()
 	std::chrono::time_point startSP = std::chrono::high_resolution_clock::now();
 	if (_enableAimed) {
 		for (const auto* spell : RE::TESDataHandler::GetSingleton()->GetFormArray<RE::SpellItem>()) {
+			j.clear();
 			if (spell) {
-				j.clear();
 				j["ModName"] = spell->GetFile()->GetFilename();                                                          //ModName
 				j["SpellName"] = spell->GetFullName();                                                                   //SpellName
 				j["SpellFormID"] = spell->GetRawFormID();                                                                //SpellFormID
@@ -142,7 +142,7 @@ void DataManager::PatchSpells()
 							if (shouldPatch) {
 								for (const std::string& spellFormID : _FormIDArray) {
 									auto formID = InlineUtils::GetFormIDFromIdentifier(spellFormID);
-									if (formID && spell->GetFormID() == formID) {
+									if (spell->GetFormID() == formID) {
 										shouldPatch = false;
 
 										logger::debug("{}", _starredString);
@@ -200,7 +200,7 @@ void DataManager::PatchSpells()
 					}
 				}
 			}
-			_SpellInfo.push_back(j);
+			if ( !j.empty() ) _SpellInfo.push_back(j);
 		}
 	}
 
@@ -268,7 +268,7 @@ void DataManager::RevertToDefault()
 void DataManager::ReloadLoggingIfNecessary(const std::string_view& LogLevelStr)
 {
 
-	const std::unordered_map<std::string_view, spdlog::level::level_enum> logLevelMap{
+	const static std::unordered_map<std::string_view, spdlog::level::level_enum> logLevelMap{
 		{ "trace"sv, spdlog::level::trace },
 		{ "debug"sv, spdlog::level::debug },
 		{ "info"sv, spdlog::level::info },
@@ -285,6 +285,7 @@ void DataManager::ReloadLoggingIfNecessary(const std::string_view& LogLevelStr)
 
 		if (newLevel != spdlog::level::off) {
 			if (spdlog::default_logger()->sinks().empty()) {
+        logger::info("Spdlog Sinks are empty. Creating new sinks on log level: {}", LogLevelStr);
 				Logging logger(newLevel);
 			} else {
 				spdlog::set_level(newLevel);
@@ -298,6 +299,7 @@ void DataManager::ReloadLoggingIfNecessary(const std::string_view& LogLevelStr)
 	} else {
 		logger::error("Invalid log level: {}. Defaulting to info.", LogLevelStr);
 		if (spdlog::default_logger()->sinks().empty()) {
+      logger::info("Spdlog Sinks are empty. Creating new sinks on log level: info");
 			Logging logger(spdlog::level::info);
 		} else {
 			spdlog::set_level(spdlog::level::info);
@@ -322,7 +324,7 @@ void DataManager::ProcessMainJson()
 	ordered_nJson AimedFireForgetLG = AimedFireForget[MainJsonKeys[13]];  //LS == Limit Gravity
 
 	//Enable
-	constexpr short Enable{ 3 };
+	constexpr auto Enable{ 3 };
 	_enableAimed = Aimed[MainJsonKeys[Enable]].get<bool>();
 	_changeAimedFireForgetSpeedEnable = AimedFireForgetCS[MainJsonKeys[Enable]].get<bool>();
 	_limitAimedFireForgetSpeedEnable = AimedFireForgetLS[MainJsonKeys[Enable]].get<bool>();
@@ -331,21 +333,21 @@ void DataManager::ProcessMainJson()
 	_limitAimedFireForgetGravityEnable = AimedFireForgetLG[MainJsonKeys[Enable]].get<bool>();
 
 	//Speed
-	constexpr short Speed{ 6 };
+	constexpr auto Speed{ 6 };
 	_aimedFireForgetSpeed = AimedFireForgetCS[MainJsonKeys[Speed]].get<float>();
 
 	//Gravity
-	constexpr short Gravity{ 12 };
+	constexpr auto Gravity{ 12 };
 	_aimedFireForgetGravity = AimedFireForgetCG[MainJsonKeys[Gravity]].get<float>();
 
 	//Min
-	constexpr short Min{ 8 };
+	constexpr auto Min{ 8 };
 	_limitAimedFireForgetSpeedMin = AimedFireForgetLS[MainJsonKeys[Min]].get<float>();
 	_RandomizeAimedFireForgetSpeedMin = AimedFireForgetRS[MainJsonKeys[Min]].get<float>();
 	_limitAimedFireForgetGravityMin = AimedFireForgetLG[MainJsonKeys[Min]].get<float>();
 
 	//Max
-	constexpr short Max{ 9 };
+	constexpr auto Max{ 9 };
 	_limitAimedFireForgetSpeedMax = AimedFireForgetLS[MainJsonKeys[Max]].get<float>();
 	_RandomizeAimedFireForgetSpeedMax = AimedFireForgetRS[MainJsonKeys[Max]].get<float>();
 	_limitAimedFireForgetGravityMax = AimedFireForgetLG[MainJsonKeys[Max]].get<float>();
