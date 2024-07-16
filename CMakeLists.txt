@@ -87,15 +87,15 @@ option(TESTING "Enable testing mode." OFF)
 message("\tTesting: ${TESTING}")
 
 
-# if(TESTING)
-#     add_definitions(-DTESTING)
-#     message(STATUS "Added TESTING Define Flag")   
-# endif()
+if(TESTING)
+    add_definitions(-DTESTING)
+    message(STATUS "Added TESTING Define Flag")   
+endif()
 
-# if((CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo") AND TESTING)
-#     add_definitions(-DNDEBUG)
-#     message(STATUS "Added NDEBUG Define Flag")
-# endif()
+if(${CMAKE_BUILD_TYPE} STREQUAL "Release" OR ${CMAKE_BUILD_TYPE} STREQUAL "MinSizeRel")
+    remove_definitions(-DTESTING)
+    message(STATUS "Removed TESTING Define Flag")
+endif()
 
 
 ########################################################################################################################
@@ -103,8 +103,20 @@ message("\tTesting: ${TESTING}")
 ########################################################################################################################
 set(PROJECT_AUTHOR "NoName365")
 
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/extern/CommonLibSSE-NG")
-include(${CMAKE_CURRENT_SOURCE_DIR}/extern/CommonLibSSE-NG/cmake/CommonLibSSE.cmake)
+if(NOT DEFINED ENV{GITHUB_ENV})
+        set(CommonLibSSE $ENV{CommonLibSSEPath})
+else()
+        set(CommonLibSSE "${CMAKE_CURRENT_SOURCE_DIR}/extern/CommonLibSSE-NG/")
+endif()
+
+if(NOT DEFINED CommonLibSSE)
+        message(FATAL_ERROR "Variable CommonLibSSE is not Defined.Make sure to define it")
+endif()
+
+message(STATUS "CommonLibSSE Path: ${CommonLibSSE}")
+
+add_subdirectory(${CommonLibSSE} CommonLibSSE-NG)
+include(${CommonLibSSE}/cmake/CommonLibSSE.cmake)
 # find_package(CommonLibSSE CONFIG REQUIRED)
 include(FetchContent)
 

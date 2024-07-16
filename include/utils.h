@@ -3,33 +3,41 @@
 namespace InlineUtils
 {
 
-	using RE::FormID;
-	[[nodiscard]] inline FormID GetFormIDFromIdentifier(const std::string& identifier)
+	[[nodiscard]] inline RE::TESForm* GetFormIDFromIdentifier(const std::string& identifier)
 	{
-		RE::TESDataHandler* dataHandler = RE::TESDataHandler::GetSingleton();
-		auto                delimiter = identifier.find('|');
-		if (delimiter != std::string::npos) {
-			std::string        modName = identifier.substr(0, delimiter);
-			std::string        modForm = identifier.substr(delimiter + 1);
-			uint32_t           formID = std::stoul(modForm, nullptr, 16) & 0xFFFFFF;
-			const RE::TESFile* mod = (RE::TESFile*)dataHandler->LookupModByName(modName.c_str());
-			if (mod) {
-				if (mod->IsLight()) {
-					formID = std::stoul(modForm, nullptr, 16) & 0xFFF;
+		try {
+			RE::TESDataHandler* dataHandler = RE::TESDataHandler::GetSingleton();
+			size_t              delimiter = identifier.find('|');
+			if (delimiter != std::string::npos) {
+				std::string        modName = identifier.substr(0, delimiter);
+				std::string        modForm = identifier.substr(delimiter + 1);
+				RE::FormID         formID = std::stoul(modForm, nullptr, 16) & 0xFFFFFF;
+				const RE::TESFile* mod = dataHandler->LookupModByName(modName);
+				if (mod) {
+					if (mod->IsLight()) {
+						formID = std::stoul(modForm, nullptr, 16) & 0xFFF;
+					}
+					return dataHandler->LookupForm(formID, modName);
 				}
-				return dataHandler->LookupForm(formID, modName.c_str())->GetFormID();
 			}
+			return nullptr;
+		} catch (const std::invalid_argument& e) {
+			logger::error("Invalid argument: {}", e.what());
+			return nullptr;
+		} catch (const std::out_of_range& e) {
+			logger::error("Out of range: {}", e.what());
+			return nullptr;
 		}
-    logger::error("Couldn't resolve '{}' into valid FormID.");
-		return static_cast<FormID>(0);
 	}
 
-	[[nodiscard]] inline std::string GetStringFromFormIDAndModName(FormID formID, RE::TESFile* File)
+	[[nodiscard]] inline std::string GetStringFromFormIDAndModName(RE::FormID formID, RE::TESFile* File)
 	{
-		bool        isLight = File->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
-		FormID      FormID = isLight ? formID & 0xFFF : formID & 0xFFFFFF;
-		std::string identifier = std::format("{}|{:#X}", File->GetFilename(), FormID);
-		return identifier;
+		bool              isLight = File->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
+		RE::FormID        FormID = isLight ? formID & 0xFFF : formID & 0xFFFFFF;
+		std::stringstream ss;
+		ss << File->GetFilename() << "|0x" << std::uppercase << std::hex << FormID;
+		// std::string identifier = std::format("{}|{:X}", File->GetFilename(), FormID);
+		return ss.str();
 	}
 
 	template <typename StringType>
@@ -60,9 +68,9 @@ namespace InlineUtils
 	{
 		std::wstring confirmationMessage = InlineUtils::toWideString(errorString + "\nClick 'NO' to Close the Game");
 		std::wstring moduleName = InlineUtils::toWideString(SKSE::PluginDeclaration::GetSingleton()->GetName());
-		switch (MessageBoxW(nullptr, confirmationMessage.c_str(), moduleName.c_str(), MB_YESNO | MB_ICONQUESTION)) {
+		switch (REX::W32::MessageBoxW(nullptr, confirmationMessage.c_str(), moduleName.c_str(), MB_YESNO | MB_ICONQUESTION)) {
 		case IDNO:
-			TerminateProcess(GetCurrentProcess(), EXIT_FAILURE);
+			REX::W32::TerminateProcess(REX::W32::GetCurrentProcess(), EXIT_FAILURE);
 			break;
 		default:
 			break;
@@ -118,5 +126,19 @@ namespace InlineUtils
 			std::uniform_real_distribution<T> distributor(lower_bound, upper_bound);
 			return distributor(gen);
 		}
+	}
+
+	[[nodiscard]] inline bool resolve_symlink(fs::path& entry_path, size_t max_depth)
+	{
+		size_t depth{ 0sz };
+		while (fs::is_symlink(entry_path)) {
+			if (depth >= max_depth) {
+				logger::error("Maximum symlink depth reached: {}", fs::absolute(entry_path).generic_string());
+				return false;
+			}
+			entry_path = fs::read_symlink(entry_path);
+			depth++;
+		}
+		return true;
 	}
 }
