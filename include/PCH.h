@@ -14,8 +14,8 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <cuchar>
@@ -46,8 +46,8 @@
 #include <future>
 #include <initializer_list>
 #include <iomanip>
-#include <ios>
 #include <iosfwd>
+#include <ios>
 #include <iostream>
 #include <istream>
 #include <iterator>
@@ -66,8 +66,8 @@
 #include <queue>
 #include <random>
 #include <ranges>
-#include <ratio>
 #include <regex>
+#include <ratio>
 #include <scoped_allocator>
 #include <semaphore>
 #include <set>
@@ -84,9 +84,9 @@
 #include <system_error>
 #include <thread>
 #include <tuple>
-#include <type_traits>
 #include <typeindex>
 #include <typeinfo>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -96,13 +96,13 @@
 #include <version>
 
 #include <RE/Skyrim.h>
-#include <REL/Relocation.h>
 #include <SKSE/SKSE.h>
+#include <REL/Relocation.h>
 
-#include <Psapi.h>
 #include <ShlObj_core.h>
 #include <Windows.h>
-#undef cdecl  // Workaround for Clang 14 CMake configure error.
+#include <Psapi.h>
+#undef cdecl // Workaround for Clang 14 CMake configure error.
 
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
@@ -115,9 +115,8 @@ using namespace REL::literals;
 
 namespace logger = SKSE::log;
 
-namespace util
-{
-	using SKSE::stl::report_and_fail;
+namespace util {
+    using SKSE::stl::report_and_fail;
 }
 
 #include <nlohmann/json.hpp>
