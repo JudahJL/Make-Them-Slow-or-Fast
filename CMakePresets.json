@@ -78,17 +78,6 @@
       }
     },
     {
-      "name": "Release - TESTING",
-      "inherits": [
-        "base"
-      ],
-      "displayName": "Release - TESTING",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "TESTING": "ON"
-      }
-    },
-    {
       "name": "RelWithDebInfo - TESTING",
       "inherits": [
         "base"
@@ -96,17 +85,6 @@
       "displayName": "RelWithDebInfo - TESTING",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "TESTING": "ON"
-      }
-    },
-    {
-      "name": "MinSizeRel - TESTING",
-      "inherits": [
-        "base"
-      ],
-      "displayName": "MinSizeRel - TESTING",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "MinSizeRel",
         "TESTING": "ON"
       }
     }
@@ -143,21 +121,9 @@
       "description": ""
     },
     {
-      "name": "Release - TESTING",
-      "displayName": "Release - TESTING",
-      "configurePreset": "Release - TESTING",
-      "description": ""
-    },
-    {
       "name": "RelWithDebInfo - TESTING",
       "displayName": "RelWithDebInfo - TESTING",
       "configurePreset": "RelWithDebInfo - TESTING",
-      "description": ""
-    },
-    {
-      "name": "MinSizeRel - TESTING",
-      "displayName": "MinSizeRel - TESTING",
-      "configurePreset": "MinSizeRel - TESTING",
       "description": ""
     }
   ]

@@ -50,8 +50,9 @@ void DataManager::LoadExclusionJsonFiles()
 			for (const auto& entry : fs::directory_iterator(_FolderPath)) {
 				fs::path entry_path = entry.path();
 
-				while (fs::is_symlink(entry_path)) {
-					entry_path = fs::read_symlink(entry_path);
+				if (!InlineUtils::resolve_symlink(entry_path, 10)) {
+					logger::error("Skipping entry due to symlink loop: {}", fs::absolute(entry_path).generic_string());
+					continue;
 				}
 
 				if (fs::is_regular_file(entry_path) && entry_path.extension() == ".json") {
@@ -78,9 +79,10 @@ void DataManager::LoadExclusionJsonFiles()
 
 					constexpr static const char* data1{ "SPELL FormID to Exclude" };
 					constexpr static const char* data2{ "SPELL File(s) to Exclude" };
-
-					for (const std::string& a : MergeJsonData[data1]) _FormIDArray.insert(a);
-					for (const std::string& a : MergeJsonData[data2]) _TESFileArray.insert(a);
+					if (MergeJsonData[data1].is_array() && MergeJsonData[data2].is_array()) {
+						for (const std::string& a : MergeJsonData[data1]) _FormIDArray.insert(a);
+						for (const std::string& a : MergeJsonData[data2]) _TESFileArray.insert(a);
+					}
 				}
 			}
 		}
@@ -141,15 +143,17 @@ void DataManager::PatchSpells()
 							}
 							if (shouldPatch) {
 								for (const std::string& spellFormID : _FormIDArray) {
-									auto formID = InlineUtils::GetFormIDFromIdentifier(spellFormID);
-									if (spell->GetFormID() == formID) {
-										shouldPatch = false;
+									auto form = InlineUtils::GetFormIDFromIdentifier(spellFormID);
+									if (form) {
+										if (spell->GetFormID() == form->GetFormID()) {
+											shouldPatch = false;
 
-										logger::debug("{}", _starredString);
-										logger::debug("Skipping Spell : Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(), formID,
-											spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
-										logger::debug("{}", _starredString);
-										break;
+											logger::debug("{}", _starredString);
+											logger::debug("Skipping Spell : Name:{}|FormID:{:08X}|Projectile Name:{}|Projectile FormID:{:08X}|Projectile Speed:{}|Projectile Gravity:{}|File:{}", spell->GetFullName(), form->GetFormID(),
+												spellProjectile->GetFullName(), spellProjectile->GetRawFormID(), spellProjectile->data.speed, spellProjectile->data.gravity, spell->GetFile()->GetFilename());
+											logger::debug("{}", _starredString);
+											break;
+										}
 									}
 								}
 							}
@@ -200,10 +204,9 @@ void DataManager::PatchSpells()
 					}
 				}
 			}
-			if ( !j.empty() ) _SpellInfo.push_back(j);
+			_SpellInfo.push_back(j);
 		}
 	}
-
 	logger::info("{} {} Finished Patching.", SKSE::PluginDeclaration::GetSingleton()->GetName(), SKSE::PluginDeclaration::GetSingleton()->GetVersion().string("."));
 
 #ifdef TESTING
@@ -228,7 +231,7 @@ void DataManager::PatchSpells()
 
 	std::chrono::nanoseconds nanosecondsTakenForSP = std::chrono::duration(std::chrono::high_resolution_clock::now() - startSP);
 
-	logger::info("Time Taken in DataManager::PatchSpells() totally is {} nanoseconds or {} microseconds or {} milliseconds or {} seconds or {} minutes", nanosecondsTakenForSP.count(),
+	logger::info("Time Taken in {} totally is {} nanoseconds or {} microseconds or {} milliseconds or {} seconds or {} minutes", std::source_location::current().function_name(), nanosecondsTakenForSP.count(),
 		std::chrono::duration_cast<std::chrono::microseconds>(nanosecondsTakenForSP).count(), std::chrono::duration_cast<std::chrono::milliseconds>(nanosecondsTakenForSP).count(),
 		std::chrono::duration_cast<std::chrono::seconds>(nanosecondsTakenForSP).count(), std::chrono::duration_cast<std::chrono::minutes>(nanosecondsTakenForSP).count());
 }
