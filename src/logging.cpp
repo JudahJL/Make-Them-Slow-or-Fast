@@ -1,77 +1,30 @@
 #include "logging.h"
 
-Logging::Logging()
-{
-	std::optional<fs::path> path = logger::log_directory();
+void InitializeLogging() {
+    // ReSharper disable once CppLocalVariableMayBeConst
+    auto path{ logger::log_directory() };
+    auto plugin = SKSE::PluginDeclaration::GetSingleton();
+    if(!path) { SKSE::stl::report_and_fail("Unable to lookup SKSE logs directory."); }
+    std::array<char, MAX_PATH> buff;
+    sprintf_s(buff.data(), MAX_PATH, "%s.log", plugin->GetName().data());
+    *path /= buff.data();
 
-	if (!path) {
-		util::report_and_fail("Unable to lookup SKSE logs directory.");
-	}
+    auto  log{ std::make_shared<spdlog::logger>("Global") };
+    auto& log_sinks{ log->sinks() };
 
-	*path /= std::format("{}.log", SKSE::PluginDeclaration::GetSingleton()->GetName());
+    if(REX::W32::IsDebuggerPresent()) {
+        log_sinks.reserve(2);
+        const auto msvc_sink{ std::make_shared<spdlog::sinks::msvc_sink_mt>() };
+        msvc_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] "
+                               "[Make_Them_Slow_or_Fast.dll,%s:%#] %v");
+        log_sinks.emplace_back(msvc_sink);
+    }
+    const auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true);
+    file_sink->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] [%t] [%s:%#] %v");
+    log_sinks.emplace_back(file_sink);
 
-	std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::logger>(SKSE::PluginDeclaration::GetSingleton()->GetName().data());
-
-	SetupLog(path, log);
-}
-
-Logging::Logging(spdlog::level::level_enum CommonLevel, std::string_view Name)
-{
-	std::optional<fs::path> path = logger::log_directory();
-
-	if (!path) {
-		util::report_and_fail("Unable to lookup SKSE logs directory.");
-	}
-
-	*path /= std::format("{}.log", Name);
-
-	std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::logger>(Name.data());
-
-	SetupLog(path, log, CommonLevel, CommonLevel);
-}
-
-Logging::Logging(spdlog::level::level_enum SetLevel, spdlog::level::level_enum FlushLevel, std::string_view Name)
-{
-	std::optional<fs::path> path = logger::log_directory();
-
-	if (!path) {
-		util::report_and_fail("Unable to lookup SKSE logs directory.");
-	}
-
-	*path /= std::format("{}.log", Name);
-
-	std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::logger>(Name.data());
-
-	SetupLog(path, log, SetLevel, FlushLevel);
-}
-
-Logging::Logging(std::string_view Name)
-{
-	std::optional<fs::path> path = logger::log_directory();
-
-	if (!path) {
-		util::report_and_fail("Unable to lookup SKSE logs directory.");
-	}
-
-	*path /= std::format("{}.log", Name);
-
-	std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::logger>(Name.data());
-
-	SetupLog(path, log);
-}
-
-void Logging::SetupLog(std::optional<fs::path> path, std::shared_ptr<spdlog::logger>& log, spdlog::level::level_enum SetLevel, spdlog::level::level_enum FlushLevel)
-{
-	if (IsDebuggerPresent()) {
-		log->sinks().reserve(2);
-		log->sinks().push_back(_MSVCSink);
-	} else {
-		log->sinks().reserve(1);
-	}
-	log->sinks().push_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true));
-
-	log->set_level(SetLevel);
-	log->flush_on(FlushLevel);
-	set_default_logger(std::move(log));
-	spdlog::set_pattern(_Pattern);
+    log->set_level(spdlog::level::trace);
+    log->flush_on(spdlog::level::off);
+    spdlog::set_default_logger(std::move(log));
+    SPDLOG_INFO("{} v{} is loading...", plugin->GetName(), plugin->GetVersion().string("."));
 }

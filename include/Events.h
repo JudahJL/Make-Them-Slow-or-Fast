@@ -3,8 +3,8 @@
 class SKSEEvent
 {
 public:
-	static void InitializeMessaging();
+    static void InitializeMessaging();
 
 private:
-	static void MessageListener(SKSE::MessagingInterface::Message* message);
+    static void MessageListener(SKSE::MessagingInterface::Message* message);
 };

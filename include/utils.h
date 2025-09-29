@@ -1,144 +1,118 @@
 #pragma once
 
-namespace InlineUtils
-{
+namespace InlineUtils {
+    template<std::size_t N, char FillChar>
+    [[nodiscard]] constexpr auto make_filled_char_array() -> std::array<char, N + 1> {
+        std::array<char, N + 1> arr{};
+        arr.fill(FillChar);
+        arr.back() = '\0';
+        return arr;
+    }
 
-	[[nodiscard]] inline RE::TESForm* GetFormIDFromIdentifier(const std::string& identifier)
-	{
-		try {
-			RE::TESDataHandler* dataHandler = RE::TESDataHandler::GetSingleton();
-			size_t              delimiter = identifier.find('|');
-			if (delimiter != std::string::npos) {
-				std::string        modName = identifier.substr(0, delimiter);
-				std::string        modForm = identifier.substr(delimiter + 1);
-				RE::FormID         formID = std::stoul(modForm, nullptr, 16) & 0xFFFFFF;
-				const RE::TESFile* mod = dataHandler->LookupModByName(modName);
-				if (mod) {
-					if (mod->IsLight()) {
-						formID = std::stoul(modForm, nullptr, 16) & 0xFFF;
-					}
-					return dataHandler->LookupForm(formID, modName);
-				}
-			}
-			return nullptr;
-		} catch (const std::invalid_argument& e) {
-			logger::error("Invalid argument: {}", e.what());
-			return nullptr;
-		} catch (const std::out_of_range& e) {
-			logger::error("Out of range: {}", e.what());
-			return nullptr;
-		}
-	}
+    inline std::string _wstringToString(const std::wstring& wstr) {
+        if(wstr.empty()) return {};
+        const int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, wstr.data(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
+        std::string str(sizeNeeded, 0);
+        WideCharToMultiByte(CP_UTF8, 0, wstr.data(), static_cast<int>(wstr.size()), str.data(), sizeNeeded, nullptr, nullptr);
+        return str;
+    }
 
-	[[nodiscard]] inline std::string GetStringFromFormIDAndModName(RE::FormID formID, RE::TESFile* File)
-	{
-		bool              isLight = File->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
-		RE::FormID        FormID = isLight ? formID & 0xFFF : formID & 0xFFFFFF;
-		std::stringstream ss;
-		ss << File->GetFilename() << "|0x" << std::uppercase << std::hex << FormID;
-		// std::string identifier = std::format("{}|{:X}", File->GetFilename(), FormID);
-		return ss.str();
-	}
+    static inline std::unordered_map<std::wstring, std::string> cache;
 
-	template <typename StringType>
-	[[nodiscard]] inline std::wstring toWideString(const StringType& str)
-	{
-		if constexpr (std::is_same_v<StringType, std::string_view>) {
-			size_t wideLength = MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.length()), nullptr, 0);
+    inline std::string_view wstringToString(const std::wstring& wstr) {
+        if(const auto it = cache.find(wstr); it != cache.end()) {
+            return it->second;  // Return cached result
+        }
 
-			std::wstring wideStr(wideLength, L'\0');
+        return cache.emplace(wstr, _wstringToString(wstr)).first->second;
+    }
 
-			MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.length()), &wideStr[0], static_cast<int>(wideLength));
+    [[nodiscard]] inline RE::TESForm* GetFormIDFromIdentifier(const std::string_view identifier) {
+        try {
+            auto* dataHandler = RE::TESDataHandler::GetSingleton();
+            if(const auto delimiter = identifier.find('|'); delimiter != std::string::npos) {
+                const auto modName = identifier.substr(0, delimiter);
+                const auto modForm = identifier.substr(delimiter + 1);
+                RE::FormID formID  = std::stoul(modForm.data(), nullptr, 16) & 0xFF'FF'FF;
+                if(const RE::TESFile* mod = dataHandler->LookupModByName(modName)) {
+                    if(mod->IsLight()) {
+                        formID = std::stoul(modForm.data(), nullptr, 16) & 0xF'FF;
+                    }
+                    return dataHandler->LookupForm(formID, modName);
+                }
+            }
+            return nullptr;
+        } catch(const std::invalid_argument& e) {
+            SPDLOG_ERROR("Invalid argument: {}", e.what());
+            return nullptr;
+        } catch(const std::out_of_range& e) {
+            SPDLOG_ERROR("Out of range: {}", e.what());
+            return nullptr;
+        }
+    }
 
-			return wideStr;
-		} else if constexpr (std::is_same_v<StringType, std::string>) {
-			size_t wideLength = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0);
+    [[nodiscard]] inline std::string GetStringFromFormIDAndModName(const RE::FormID formID, const RE::TESFile* File) {
+        const RE::FormID  FormID = File->IsLight() ? formID & 0xF'FF : formID & 0xFF'FF'FF;
+        std::stringstream ss;
+        ss << File->GetFilename() << "|0x" << std::uppercase << std::hex << FormID;
+        return ss.str();
+    }
 
-			std::wstring wideStr(wideLength, L'\0');
+    template<typename T>
+    requires std::is_arithmetic_v<T>
+    void limit(T& value, T min_value, T max_value) {
+        value = (value < min_value) ? min_value : ((value > max_value) ? max_value : value);
+    }
 
-			MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.length()), &wideStr[0], static_cast<int>(wideLength));
+    template<class T>
+    void RemoveAnyDuplicates(std::vector<T>& vec) {
+        // Sort the vector
+        std::sort(vec.begin(), vec.end());
 
-			return wideStr;
-		} else {
-			static_assert(std::is_same_v<StringType, std::string> || std::is_same_v<StringType, std::string_view>, "Unsupported string type");
-		}
-	}
+        // Use std::unique to move duplicates to the end
+        auto last = std::unique(vec.begin(), vec.end());
 
-	inline void customMessageBox(const std::string& errorString)
-	{
-		std::wstring confirmationMessage = InlineUtils::toWideString(errorString + "\nClick 'NO' to Close the Game");
-		std::wstring moduleName = InlineUtils::toWideString(SKSE::PluginDeclaration::GetSingleton()->GetName());
-		switch (REX::W32::MessageBoxW(nullptr, confirmationMessage.c_str(), moduleName.c_str(), MB_YESNO | MB_ICONQUESTION)) {
-		case IDNO:
-			REX::W32::TerminateProcess(REX::W32::GetCurrentProcess(), EXIT_FAILURE);
-			break;
-		default:
-			break;
-		}
-	}
+        // Erase the duplicates
+        vec.erase(last, vec.end());
+    }
 
-	template <typename T>
-	inline void limit(T& value, T min_value, T max_value)
-	{
-		value = (value < min_value) ? min_value : ((value > max_value) ? max_value : value);
-	}
+    template<class T>
+    [[nodiscard]] T* GetFormFromIdentifier(const std::string& identifier) {
+        const auto dataHandler = RE::TESDataHandler::GetSingleton();
+        if(const auto delimiter = identifier.find('|'); delimiter != std::string::npos) {
+            const std::string modName = identifier.substr(0, delimiter);
+            const std::string modForm = identifier.substr(delimiter + 1);
+            uint32_t          formID  = std::stoul(modForm, nullptr, 16) & 0xFF'FF'FF;
+            if(const auto* mod = dataHandler->LookupModByName(modName)) {
+                if(mod->IsLight()) formID = std::stoul(modForm, nullptr, 16) & 0xF'FF;
+                return dataHandler->LookupForm<T>(formID, modName);
+            }
+        }
+        return nullptr;
+    }
 
-	template <class T>
-	inline void RemoveAnyDuplicates(std::vector<T>& vec)
-	{
-		// Sort the vector
-		std::sort(vec.begin(), vec.end());
-
-		// Use std::unique to move duplicates to the end
-		auto last = std::unique(vec.begin(), vec.end());
-
-		// Erase the duplicates
-		vec.erase(last, vec.end());
-	}
-
-	template <class T>
-	[[nodiscard]] inline T* GetFormFromIdentifier(const std::string& identifier)
-	{
-		auto dataHandler = RE::TESDataHandler::GetSingleton();
-		auto delimiter = identifier.find('|');
-		if (delimiter != std::string::npos) {
-			std::string modName = identifier.substr(0, delimiter);
-			std::string modForm = identifier.substr(delimiter + 1);
-			uint32_t    formID = std::stoul(modForm, nullptr, 16) & 0xFFFFFF;
-			auto*       mod = dataHandler->LookupModByName(modName.c_str());
-			if (mod->IsLight())
-				formID = std::stoul(modForm, nullptr, 16) & 0xFFF;
-			return dataHandler->LookupForm<T>(formID, modName.c_str());
-		}
-		return nullptr;
-	}
-
-	template <typename T>
-	[[nodiscard]] inline T getRandom(T lower_bound, T upper_bound)
-	{
-		static std::random_device rd;
-		static std::mt19937       gen(rd());
-
-		if constexpr (std::is_integral<T>::value) {
-			std::uniform_int_distribution<T> distributor(lower_bound, upper_bound);
-			return distributor(gen);
-		} else if constexpr (std::is_floating_point<T>::value) {
-			std::uniform_real_distribution<T> distributor(lower_bound, upper_bound);
-			return distributor(gen);
-		}
-	}
-
-	[[nodiscard]] inline bool resolve_symlink(fs::path& entry_path, size_t max_depth)
-	{
-		size_t depth{ 0sz };
-		while (fs::is_symlink(entry_path)) {
-			if (depth >= max_depth) {
-				logger::error("Maximum symlink depth reached: {}", fs::absolute(entry_path).generic_string());
-				return false;
-			}
-			entry_path = fs::read_symlink(entry_path);
-			depth++;
-		}
-		return true;
-	}
-}
+    // ReSharper disable once CppNotAllPathsReturnValue
+    template<class T>
+    requires std::is_arithmetic_v<T>
+    T getRandom(T min, T max) {
+        // non-inclusive i.e., [min, max)
+        if(min >= max) {
+            char errorMessage[256];
+            if constexpr(std::is_floating_point_v<T>) {
+                sprintf_s(errorMessage, std::size(errorMessage), "The Value of min: '%f' must be lesser than the value of max: '%f'", min, max);  // max length possible: 153
+            } else {
+                sprintf_s(errorMessage, std::size(errorMessage), "The Value of min: '%lld' must be lesser than the value of max: '%lld'", static_cast<long long>(min), static_cast<long long>(max));  // max length possible: 99
+            }
+            throw std::invalid_argument(errorMessage);
+        }
+        static std::random_device rd;
+        thread_local std::mt19937 gen(rd());
+        if constexpr(std::is_integral_v<T>) {
+            std::uniform_int_distribution<T> distrib(min, max - 1);
+            return distrib(gen);
+        } else if constexpr(std::is_floating_point_v<T>) {
+            std::uniform_real_distribution<T> distrib(min, std::nextafter(max, min));
+            return distrib(gen);
+        }
+    }
+}  // namespace InlineUtils

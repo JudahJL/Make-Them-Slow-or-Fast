@@ -533,7 +533,6 @@ FodyWeavers.xsd
 
 build/
 
-contrib/Distribution/Plugin**/
 contrib/**/**.7z
 contrib/**/**.zip
 contrib/**/**.rar
@@ -556,3 +555,9 @@ contrib/**/**.gz.*
 contrib/**/**.bz2.*
 contrib/**/**.xz.*
 contrib/**/**.iso.*
+contrib/**/**.dll
+contrib/**/**.pdb
+
+/.env
+
+/CMakeLists.txt

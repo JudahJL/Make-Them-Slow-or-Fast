@@ -1,0 +1,200 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "Logging": {
+      "$ref": "#/definitions/LogLevelModel"
+    },
+    "Aimed": {
+      "$ref": "#/definitions/AimedModel"
+    }
+  },
+  "required": [
+    "Logging",
+    "Aimed"
+  ],
+  "title": "MTSOFModel",
+  "type": "object",
+  "definitions": {
+    "AimedModel": {
+      "additionalProperties": false,
+      "properties": {
+        "Enable": {
+          "$ref": "#/definitions/EnableType"
+        },
+        "Fire and Forget": {
+          "$ref": "#/definitions/FireAndForgetModel"
+        }
+      },
+      "required": [
+        "Enable",
+        "Fire and Forget"
+      ],
+      "title": "AimedModel",
+      "type": "object"
+    },
+    "ChangeGravityModel": {
+      "additionalProperties": false,
+      "properties": {
+        "Enable": {
+          "$ref": "#/definitions/EnableType"
+        },
+        "Gravity": {
+          "$ref": "#/definitions/GravityType"
+        }
+      },
+      "required": [
+        "Enable",
+        "Gravity"
+      ],
+      "title": "ChangeGravityModel",
+      "type": "object"
+    },
+    "ChangeSpeedModel": {
+      "additionalProperties": false,
+      "properties": {
+        "Enable": {
+          "$ref": "#/definitions/EnableType"
+        },
+        "Speed": {
+          "$ref": "#/definitions/SpeedType"
+        }
+      },
+      "required": [
+        "Enable",
+        "Speed"
+      ],
+      "title": "ChangeSpeedModel",
+      "type": "object"
+    },
+    "EnableType": {
+      "type": "boolean"
+    },
+    "FireAndForgetModel": {
+      "additionalProperties": false,
+      "properties": {
+        "Change Speed": {
+          "$ref": "#/definitions/ChangeSpeedModel"
+        },
+        "Limit Speed": {
+          "$ref": "#/definitions/LimitSpeedModel"
+        },
+        "Randomize Speed": {
+          "$ref": "#/definitions/RandomizeSpeedModel"
+        },
+        "Change Gravity": {
+          "$ref": "#/definitions/ChangeGravityModel"
+        },
+        "Limit Gravity": {
+          "$ref": "#/definitions/LimitGravityModel"
+        }
+      },
+      "required": [
+        "Change Speed",
+        "Limit Speed",
+        "Randomize Speed",
+        "Change Gravity",
+        "Limit Gravity"
+      ],
+      "title": "FireAndForgetModel",
+      "type": "object"
+    },
+    "GravityType": {
+      "type": "number"
+    },
+    "LimitGravityModel": {
+      "additionalProperties": false,
+      "properties": {
+        "Enable": {
+          "$ref": "#/definitions/EnableType"
+        },
+        "Min": {
+          "$ref": "#/definitions/MinType"
+        },
+        "Max": {
+          "$ref": "#/definitions/MaxType"
+        }
+      },
+      "required": [
+        "Enable",
+        "Min",
+        "Max"
+      ],
+      "title": "LimitGravityModel",
+      "type": "object"
+    },
+    "LimitSpeedModel": {
+      "additionalProperties": false,
+      "properties": {
+        "Enable": {
+          "$ref": "#/definitions/EnableType"
+        },
+        "Min": {
+          "$ref": "#/definitions/MinType"
+        },
+        "Max": {
+          "$ref": "#/definitions/MaxType"
+        }
+      },
+      "required": [
+        "Enable",
+        "Min",
+        "Max"
+      ],
+      "title": "LimitSpeedModel",
+      "type": "object"
+    },
+    "LogLevelModel": {
+      "additionalProperties": false,
+      "properties": {
+        "LogLevel": {
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warning",
+            "error",
+            "critical",
+            "off"
+          ],
+          "title": "Loglevel",
+          "type": "string"
+        }
+      },
+      "required": [
+        "LogLevel"
+      ],
+      "title": "LogLevelModel",
+      "type": "object"
+    },
+    "MaxType": {
+      "type": "number"
+    },
+    "MinType": {
+      "type": "number"
+    },
+    "RandomizeSpeedModel": {
+      "additionalProperties": false,
+      "properties": {
+        "Enable": {
+          "$ref": "#/definitions/EnableType"
+        },
+        "Min": {
+          "$ref": "#/definitions/MinType"
+        },
+        "Max": {
+          "$ref": "#/definitions/MaxType"
+        }
+      },
+      "required": [
+        "Enable",
+        "Min",
+        "Max"
+      ],
+      "title": "RandomizeSpeedModel",
+      "type": "object"
+    },
+    "SpeedType": {
+      "type": "number"
+    }
+  }
+}

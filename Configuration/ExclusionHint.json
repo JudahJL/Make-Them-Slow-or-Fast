@@ -1,4 +1,0 @@
-{
-  "SPELL FormID to Exclude": "Specify each FormID in the format: <PluginName>|<FormID>.\nFor example: Apocalypse - Magic of Skyrim.esp|0x012364",
-  "SPELL File(s) to Exclude": "Specify each mod file by name.\nFor example: Apocalypse - Magic of Skyrim.esp"
-}

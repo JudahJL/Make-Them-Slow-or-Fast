@@ -1,688 +1,504 @@
 #include "UI.h"
-#include "DataManager.h"
+
+#include "FilePtrManager.h"
+#include "ImGuiIDGuard.h"
+#include "ImGuiTreeNodeGuard.h"
+#include "Settings.h"
 #include "utils.h"
+#include <ctre.hpp>
 
-SMFRenderer* SMFRenderer::GetSingleton()
-{
-	static SMFRenderer Singleton;
-	return std::addressof(Singleton);
+SMFRenderer SMFRenderer::Singleton;
+
+SMFRenderer& SMFRenderer::GetSingleton() { return Singleton; }
+
+void SMFRenderer::Register() {
+    if(!SKSEMenuFramework::IsInstalled()) {
+        SPDLOG_WARN("Unable to Register For SKSEMenuFramework, Please install SKSEMenuFramework to "
+                    "configure the Json Files(if you want to)");
+        return;
+    }
+
+    SKSEMenuFramework::SetSection("Make Them Slow or Fast");
+
+    SKSEMenuFramework::AddSectionItem("Edit Presets", RenderEditPresets);
+
+#ifndef NDEBUG
+    SKSEMenuFramework::AddSectionItem("Debug", RenderDebug);
+#endif
+    SPDLOG_INFO("Registered For SKSEMenuFramework");
 }
 
-void SMFRenderer::Register()
-{
-	if (!SKSEMenuFramework::IsInstalled()) {
-		logger::error("Unable to Register For SKSEMenuFramework, Please install SKSEMenuFramework to configure the Json Files(if you want to)");
-		return;
-	}
+#pragma push_macro("GetObject")
+#undef GetObject
 
-	SMFRenderer* s = GetSingleton();
+#ifndef NDEBUG
+void SMFRenderer::RenderDebug() {
+    if(ImGui::Button("Quit Game?")) {
+        REX::W32::TerminateProcess(REX::W32::GetCurrentProcess(), EXIT_SUCCESS);
+    }
+}
+#endif
 
-	std::lock_guard<std::mutex> lock(s->_lock);
+void DrawSplitter(const bool split_vertically, const float thickness, float* size0, float* size1, const float min_size0, const float min_size1) {
+    ImVec2 backup_pos;
+    ImGui::GetCursorPos(&backup_pos);
 
-	s->GetAllExclusionJsons();
-	SKSEMenuFramework::SetSection("Make Them Slow Or Fast");
+    if(split_vertically) {
+        ImGui::SetCursorPosY(backup_pos.y + *size0);
+    } else {
+        ImGui::SetCursorPosX(backup_pos.x + *size0);
+    }
+    ImGui::SetNextItemAllowOverlap();  // This is to allow having other buttons OVER our splitter.
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0, 0, 0, 0));  // We don't draw while
+                                                                       // active/pressed because as
+                                                                       // we move the panes the
+                                                                       // splitter button will be 1
+                                                                       // frame late
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.6f, 0.6f, 0.6f, 0.10f));
+    ImGui::Button("##Splitter", ImVec2(!split_vertically ? thickness : -1.0f, split_vertically ? thickness : -1.0f));
+    ImGui::PopStyleColor(3);
 
-	std::ifstream FileContainingHintsForMain("Data/SKSE/Plugins/Make Them Slow or Fast Hints/MainHint.json");
-	s->_HintsForMain = ordered_nJson::parse(FileContainingHintsForMain);
+    if(ImGui::IsItemActive()) {
+        float mouse_delta =
+            split_vertically ? ImGui::GetIO()->MouseDelta.y : ImGui::GetIO()->MouseDelta.x;
 
-	SKSEMenuFramework::AddSectionItem("Main", SMFRenderer::RenderMain);
+        // Minimum pane size
+        if(mouse_delta < min_size0 - *size0) mouse_delta = min_size0 - *size0;
+        if(mouse_delta > *size1 - min_size1) mouse_delta = *size1 - min_size1;
 
-	std::ifstream FileContainingHintsForExclusions("Data/SKSE/Plugins/Make Them Slow or Fast Hints/ExclusionHint.json");
-	s->_HintsForExclusions = ordered_nJson::parse(FileContainingHintsForExclusions);
-
-	s->_LogWindow = SKSEMenuFramework::AddWindow(s->RenderLogWindow);
-
-	SKSEMenuFramework::AddSectionItem("Exclusions", SMFRenderer::RenderExclusions);
-	logger::info("Registered For SKSEMenuFramework");
+        // Apply resize
+        *size0 += mouse_delta;
+        *size1 -= mouse_delta;
+    }
+    ImGui::SetCursorPos(backup_pos);
 }
 
-inline void __stdcall SMFRenderer::RenderLogWindow()
-{
-	ImGui::SetNextWindowSize(ImVec2(900, 900), ImGuiCond_FirstUseEver);
-	static std::string    name("Log Window##CustomLogger");
-	static std::once_flag o;
+inline void RightAlignSmallButtons(const std::initializer_list<const char*>& btns) {
+    const ImGuiStyle* style = ImGui::GetStyle();
 
-	std::call_once(o, []() {
-		name += SKSE::PluginDeclaration::GetSingleton()->GetName();
-	});
+    float button_width = style->FramePadding.x * 2;
 
-	ImGui::Begin(name.c_str(), nullptr, ImGuiWindowFlags_None);
+    for(const auto& label : btns) {
+        button_width += ImGui::CalcTextSize(label, nullptr, true, -1.0f).x;  // text width
+        button_width += style->FramePadding.x * 2;                           // padding per button
+    }
 
-	CustomLogger* c = CustomLogger::GetSingleton();
-
-	static char filterInput[128] = "";
-	ImGui::InputText("Filter", filterInput, ((int)(sizeof(filterInput) / sizeof(*filterInput))));
-
-	if (ImGui::Button("Clear Logs")) {
-		c->ClearLogs();
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Close Window")) {
-		_LogWindow->IsOpen = false;
-		c->AddLog(std::format("{} Closed Log Window", DataManager::GetSingleton()->GetUsername()));
-	}
-
-	ImGui::Separator();
-	ImGui::BeginChild("LogScroll");
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 1));
-
-	auto logs = filterInput[0] ? c->GetFilteredLogs(filterInput) : c->GetLogs();
-	for (size_t i = 0; i < logs.size(); i++) {
-		ImGui::TextUnformatted(std::format("[{}] {}", i + 1sz, logs[i]).c_str());
-	}
-
-	if (c->ShouldScrollToBottom()) {
-		ImGui::SetScrollHereY(1.0f);
-		c->ResetScrollToBottom();
-	}
-
-	ImGui::PopStyleVar();
-	ImGui::EndChild();
-	ImGui::End();
+    if(btns.size() > 1) {
+        button_width += style->ItemSpacing.x * (static_cast<float>(btns.size()) - 1.0f);  // spacing
+        // between
+        // buttons
+    }
+    ImVec2 cra;
+    ImGui::GetContentRegionAvail(&cra);
+    ImGui::SameLine(ImGui::GetCursorPosX() + cra.x - button_width);
 }
 
-void SMFRenderer::RenderMain()
-{
-	SMFRenderer* s = GetSingleton();
+enum class AlignAxis : int {
+    None = 0,
+    X    = 1 << 0,
+    Y    = 1 << 1,
+    XY   = X | Y,
+};
 
-	std::lock_guard<std::mutex> lock(s->_lock);
-	constexpr const char*       CurrentPath{ "Main." };
-
-	std::string MainFileName(std::format("Data/SKSE/Plugins/{}.json", SKSE::PluginDeclaration::GetSingleton()->GetName()));
-
-	ImGui::PushID(CurrentPath);
-
-	DataManager* d = DataManager::GetSingleton();
-
-	CustomLogger* c = CustomLogger::GetSingleton();
-
-		s->RenderJsonEditor(CurrentPath, d->GetModifiableMainJsonData(), s->_HintsForMain);
-
-	if (ImGui::Button("Save JSON")) {
-		if (s->SaveJsonToFile(MainFileName, d->GetUsername()))
-			c->AddLog(std::format("{} Saved {} Successfully", d->GetUsername(), MainFileName));
-		else
-			c->AddLog(std::format("Failed to Save {}", MainFileName));
-	}
-	if (ImGui::IsItemHovered()) {
-		ImGui::SetTooltip("You Must Click This to SAVE any Changes");
-	}
-	if (d->GetDonePatchingSpells()) {
-		ImGui::SameLine();
-		if (ImGui::Button("Revert Changes")) {
-			d->RevertToDefault();
-		}
-		if (ImGui::IsItemHovered()) {
-			ImGui::SetTooltip("This Button will Revert ANY changes made to all Spell Records Safely");
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("RePatch Changes")) {
-			if (s->SaveJsonToFile(MainFileName, d->GetUnmodifiableMainJsonData())) {
-				c->AddLog(std::format("{} Saved {} Successfully", d->GetUsername(), MainFileName));
-			} else {
-				c->AddLog(std::format("Failed to Save {}", MainFileName));
-			}
-			d->ReloadLoggingIfNecessary(d->GetUnmodifiableMainJsonData().at("Logging").at("LogLevel"));
-			d->ProcessMainJson();
-			d->LogDataManagerContents();
-			d->PatchSpells();
-			c->AddLog("Repatched Spells");
-		}
-		if (ImGui::IsItemHovered()) {
-			ImGui::SetTooltip("This Button will Patch Spell Records According to The Main Json File and and the Exclusion Files.\nFirst It will Save the file.\nThen Process it.\nThen Log The Details and finally Patch The Records");
-		}
-	}
-	ImGui::Separator();
-	static ImVec2 LoggingButtonSize;
-	ImGui::GetContentRegionAvail(std::addressof(LoggingButtonSize));
-	LoggingButtonSize.y = 0;
-	if (ImGui::Button(CustomLogger::GetSingleton()->GetLatestLog().c_str(), LoggingButtonSize)) {
-		_LogWindow->IsOpen = true;
-	}
-	if (ImGui::IsItemHovered()) {
-		ImGui::SetTooltip("Click this to open Log Window");
-	}
-
-	ImGui::PopID();
+inline bool IsAligned(AlignAxis value, AlignAxis check) {
+    return (static_cast<int>(value) & static_cast<int>(check)) != 0;
 }
 
-void SMFRenderer::RenderExclusions()
-{
-	SMFRenderer*                 s = GetSingleton();
-	CustomLogger*                c = CustomLogger::GetSingleton();
-	std::unique_lock<std::mutex> SMFLock(s->_lock);
+#pragma push_macro("max")
+#undef max
 
-	if (!s->_ExclusionJsons.empty()) {
-		size_t ExclusionJsonsSize{ s->_ExclusionJsons.size() };
-		for (size_t index = 0sz; index < ExclusionJsonsSize; index++) {
-			std::string                    name(s->_ExclusionJsons[index].first);
-			std::shared_ptr<ordered_nJson> ej{ s->_ExclusionJsons[index].second };
-			constexpr static const char*   key1{ "SPELL FormID to Exclude" };
-			constexpr static const char*   key2{ "SPELL File(s) to Exclude" };
-			std::string                    path1(name + "." + key1);
-			std::string                    path2(name + "." + key2);
-			ordered_nJson&                 SPELLFormIDToExclude{ ej->at(key1) };
-			ordered_nJson&                 SpellFilesToExclude{ ej->at(key2) };
-			if (ImGui::TreeNode(fs::path(name).filename().string().c_str())) {
-				ImGui::PushID(path1.c_str());
-				if (ImGui::TreeNode(key1)) {
-					s->RenderJsonEditor(path1, SPELLFormIDToExclude, s->_HintsForExclusions.at(key1));
-					DataManager*                 d = DataManager::GetSingleton();
-					if (d->GetDonePatchingSpells()) {
-						static std::vector<std::string> a_value_for_FormID(ExclusionJsonsSize, d->GetUnmodifiableSpellInfo().at(0).at("SpellString").get<std::string>());  //used to store the selected value of _SpellInfo of the currently traversed json
-						static std::vector<size_t>      CurrentIterationForFormID(ExclusionJsonsSize, 0sz);                                                                        //used to store the selected index of _SpellInfo of the currently traversed json
+inline void CenterText(const char* text, const AlignAxis axis = AlignAxis::X) {
+    ImVec2 avail;
+    ImGui::GetContentRegionAvail(&avail);
+    const ImVec2 text_size = ImGui::CalcTextSize(text);
 
-						if (a_value_for_FormID.size() != ExclusionJsonsSize) {
-							a_value_for_FormID.resize(ExclusionJsonsSize, d->GetUnmodifiableSpellInfo().at(0).at("SpellString").get<std::string>());
-						}
-						if (CurrentIterationForFormID.size() != ExclusionJsonsSize) {
-							CurrentIterationForFormID.resize(ExclusionJsonsSize, 0sz);
-						}
+    if(IsAligned(axis, AlignAxis::X)) {
+        const float offsetX = (avail.x - text_size.x) * 0.5f;
+        if(offsetX > 0.0f) ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+    }
 
-						InlineUtils::limit(CurrentIterationForFormID[index], 0sz, d->GetUnmodifiableSpellInfo().size());
-
-						static std::string previewValue;
-						previewValue = (d->GetUnmodifiableSpellInfo().at(CurrentIterationForFormID[index]).at("SpellName").is_null() || d->GetUnmodifiableSpellInfo()[CurrentIterationForFormID[index]]["SpellName"].get<std::string>().empty()) ? d->GetUnmodifiableSpellInfo()[CurrentIterationForFormID[index]]["SpellString"].get<std::string>() : std::format("{},{}", d->GetUnmodifiableSpellInfo()[CurrentIterationForFormID[index]]["SpellName"].get<std::string>(), d->GetUnmodifiableSpellInfo()[CurrentIterationForFormID[index]]["SpellString"].get<std::string>());
-
-						if (ImGui::BeginCombo(key1, previewValue.c_str())) {
-							for (size_t ii = 0; ii < d->GetUnmodifiableSpellInfo().size(); ii++) {
-								bool        isSelected = (CurrentIterationForFormID[index] == ii);
-
-								static std::string previewOptionsValue;
-								previewOptionsValue = (d->GetUnmodifiableSpellInfo().at(ii).at("SpellName").is_null() || d->GetUnmodifiableSpellInfo().at(ii).at("SpellName").get<std::string>().empty()) ? d->GetUnmodifiableSpellInfo().at(ii).at("SpellString").get<std::string>() : std::format("{},{}", d->GetUnmodifiableSpellInfo().at(ii).at("SpellName").get<std::string>(), d->GetUnmodifiableSpellInfo().at(ii).at("SpellString").get<std::string>());
-
-								if (ImGui::Selectable(previewOptionsValue.c_str(), isSelected)) {
-									CurrentIterationForFormID[index] = ii;
-									a_value_for_FormID[index] = d->GetUnmodifiableSpellInfo().at(CurrentIterationForFormID[index]).at("SpellString").get<std::string>();
-								}
-								if (isSelected) {
-									ImGui::SetItemDefaultFocus();
-								}
-							}
-							ImGui::EndCombo();
-						}
-						ImGui::SameLine();
-						if (ImGui::Button(UI::plus.c_str())) {
-							SPELLFormIDToExclude.push_back(a_value_for_FormID[index]);
-							d->GetModifiableFormIDArray().insert(a_value_for_FormID[index]);
-							c->AddLog(std::format("{} Added '{}' into '{}' in the section {}", d->GetUsername(), a_value_for_FormID[index], name, key1));
-							ImGui::TreePop();
-							ImGui::PopID();
-							ImGui::TreePop();
-							SMFLock.unlock();
-							return;
-						}
-					}
-					ImGui::TreePop();
-				}
-				if (ImGui::TreeNode(key2)) {
-					s->RenderJsonEditor(path1, SpellFilesToExclude, s->_HintsForExclusions.at(key2));
-					DataManager*                 d = DataManager::GetSingleton();
-					if (d->GetDonePatchingSpells()) {
-						static std::vector<std::string> a_value(ExclusionJsonsSize, d->GetUnmodifiableSpellModFiles().at(0));
-						static std::vector<size_t>      CurrentIteration(ExclusionJsonsSize, 0sz);
-
-						if (a_value.size() != ExclusionJsonsSize) {
-							a_value.resize(ExclusionJsonsSize, d->GetUnmodifiableSpellModFiles().at(0));
-						}
-						if (CurrentIteration.size() != ExclusionJsonsSize) {
-							CurrentIteration.resize(ExclusionJsonsSize, 0sz);
-						}
-
-						InlineUtils::limit(CurrentIteration[index], 0sz, d->GetUnmodifiableSpellModFiles().size());
-
-						if (ImGui::BeginCombo(key2, d->GetUnmodifiableSpellModFiles().at(CurrentIteration[index]).c_str())) {
-							for (size_t iii = 0; iii < d->GetUnmodifiableSpellModFiles().size(); iii++) {
-								bool isSelected = (CurrentIteration[index] == iii);
-								if (ImGui::Selectable(d->GetUnmodifiableSpellModFiles().at(iii).c_str(), isSelected)) {
-									CurrentIteration[index] = iii;
-									a_value[index] = d->GetUnmodifiableSpellModFiles().at(CurrentIteration[index]);
-								}
-								if (isSelected) {
-									ImGui::SetItemDefaultFocus();
-								}
-							}
-							ImGui::EndCombo();
-						}
-						ImGui::SameLine();
-						if (ImGui::Button(UI::plus.c_str())) {
-							SpellFilesToExclude.push_back(a_value[index]);
-							d->GetModifiableTESFileArray().insert(a_value[index]);
-							c->AddLog(std::format("{} Added '{}' into '{}' in the section {}", d->GetUsername(), a_value[index], name, key2));
-							ImGui::TreePop();
-							ImGui::PopID();
-							ImGui::TreePop();
-							SMFLock.unlock();
-							return;
-						}
-					}
-					ImGui::TreePop();
-				}
-
-				if (ImGui::Button("Save JSON")) {
-					DataManager*                d = DataManager::GetSingleton();
-					if (s->SaveJsonToFile(name, ej))
-						c->AddLog(std::format("{} Saved {} Successfully", d->GetUsername(), name));
-					else
-						c->AddLog(std::format("Failed to Save {}", name));
-				}
-				ImGui::SameLine();
-				if (ImGui::Button("Delete File")) {
-					if (fs::remove(name)) {
-						DataManager*                 d = DataManager::GetSingleton();
-						ej.reset();
-						s->_ExclusionJsons.erase(s->_ExclusionJsons.begin() + index);
-						c->AddLog(std::format("{} Deleted {} Successfully", d->GetUsername(), name));
-
-						ImGui::PopID();
-						ImGui::TreePop();
-						SMFLock.unlock();
-						return;
-					} else {
-						c->AddLog(std::format("Failed to Delete {}", name));
-					}
-				}
-				ImGui::PopID();
-				ImGui::TreePop();
-			}
-		}
-	}
-	static char buffer[256] = "";
-	if (ImGui::InputText("Create a Exclusion File?", buffer, ((int)(sizeof(buffer) / sizeof(*buffer))), ImGuiInputTextFlags_EnterReturnsTrue)) {
-		std::string     FileName = std::format("Data/SKSE/Plugins/Make Them Slow or Fast/{}.json", buffer);
-		std::shared_ptr j = std::make_shared<ordered_nJson>(ordered_nJson{ { "SPELL FormID to Exclude", ordered_nJson::array() }, { "SPELL File(s) to Exclude", ordered_nJson::array() } });
-
-		switch (s->CreateNewJsonFile(FileName, j)) {
-		case FileCreationType::OK:
-			{
-				s->_ExclusionJsons.push_back({ FileName, j });
-				DataManager*                d = DataManager::GetSingleton();
-				c->AddLog(std::format("{} Created {} Successfully", d->GetUsername(), FileName));
-				break;
-			}
-		case FileCreationType::Error:
-			c->AddLog(std::format("Error in Creating File {}", FileName));
-			j.reset();
-			break;
-		case FileCreationType::Duplicate:
-			c->AddLog(std::format("Not Creating Duplicate File {}", FileName));
-			j.reset();
-			break;
-		}
-	}
-	SMFLock.unlock();
-	ImGui::SameLine();
-	ImGui::Button(UI::question.c_str());
-
-	if (ImGui::IsItemHovered()) {
-		ImGui::SetTooltip("Enter a Name with less than 256 characters.\nThe File will be created in the Appropriate Path with the Appropriate Extension");
-	}
-	static ImVec2 LoggingButtonSize;
-	ImGui::GetContentRegionAvail(std::addressof(LoggingButtonSize));
-	LoggingButtonSize.y = 0;
-	if (ImGui::Button(CustomLogger::GetSingleton()->GetLatestLog().c_str(), LoggingButtonSize)) {
-		_LogWindow->IsOpen = true;
-	}
+    if(IsAligned(axis, AlignAxis::Y)) {
+        const float offsetY = (avail.y - text_size.y) * 0.5f;
+        if(offsetY > 0.0f) ImGui::SetCursorPosY(ImGui::GetCursorPosY() + offsetY);
+    }
 }
 
-void SMFRenderer::GetAllExclusionJsons()
-{
-	DataManager* d = DataManager::GetSingleton();
+#pragma pop_macro("max")
 
-	if (fs::exists(d->GetFolderPath()) && !fs::is_empty(d->GetFolderPath())) {
-		for (const fs::directory_entry& entry : fs::directory_iterator(d->GetFolderPath())) {
-			fs::path entry_path = entry.path();
+void SMFRenderer::RenderEditPresets() {
+    auto&  s = Settings::GetSingleton();
+    ImVec2 context_region;
+    ImGui::GetContentRegionAvail(&context_region);
 
-			if (!InlineUtils::resolve_symlink(entry_path, 10)) {
-				logger::error("Skipping entry due to symlink loop: {}", fs::absolute(entry_path).generic_string());
-				continue;
-			}
+    if(s.patching) {
+        FontAwesome::PushSolid();
+        constexpr auto txt = UI::Format<"Patching Spells... {ICON} ...Please wait a moment", UI::IconHourglassStart>();
+        CenterText(txt.data(), AlignAxis::XY);
+        ImGui::Text(txt.data());
+        FontAwesome::Pop();
+        return;
+    }
 
-			if (fs::is_regular_file(entry_path) && entry_path.extension() == ".json") {
-				std::string EntryPathStr(fs::absolute(entry_path).generic_string());
+    auto&      r            = SMFRenderer::GetSingleton();
+    const auto preset_names = std::views::keys(s.presets);
 
-				std::ifstream jFile(entry_path);
+    if(!r.once_flag_for_left_width) [[unlikely]] {
+        r.left_width               = context_region.x * .4f;
+        r.once_flag_for_left_width = true;
+    }
 
-				if (!jFile.is_open()) {
-					logger::error("Failed to open file: {}", EntryPathStr);
-					continue;
-				}
+    constexpr float splitter_thickness = 4.0f;
+    float           right_width        = context_region.x - r.left_width - splitter_thickness;
 
-				try {
-					std::shared_ptr<ordered_nJson> MergeData = std::make_shared<ordered_nJson>(ordered_nJson::parse(jFile));
-					_ExclusionJsons.push_back({ EntryPathStr, MergeData });
-				} catch (const ordered_nJson::parse_error& e) {
-					logger::error("{}", e.what());
-				}
-			}
-		}
-	}
+    DrawSplitter(false, 10.0f, &r.left_width, &right_width, 100, 100);
+    // Left section: preset list
+    ImGui::BeginChild("LeftSection", ImVec2(r.left_width, context_region.y), true);
+
+    if(ImGui::BeginCombo("##Selected_Preset", InlineUtils::wstringToString(s.curr_preset.filename()).data(), ImGuiComboFlags_None)) {
+        for(auto& preset_path : preset_names) {
+            std::string_view label       = InlineUtils::wstringToString(preset_path.filename());
+            const bool       is_selected = (s.curr_preset == preset_path);
+
+            if(ImGui::Selectable(label.data(), is_selected)) { s.curr_preset = preset_path; }
+            if(is_selected) { ImGui::SetItemDefaultFocus(); }
+        }
+        ImGui::EndCombo();
+    }
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Select current preset");
+
+    constexpr auto reload_curr_preset_btn_id = UI::Format<"{ICON}##load_curr_preset", UI::IconReload>();
+
+    FontAwesome::PushSolid();
+
+    r.DrawFeedbackButton(UI::IconSave{}, [&s]() { return s.SaveCurrPreset(); }, "Saves current preset to file");
+
+    ImGui::SameLine();
+
+    if(ImGui::SmallButton(reload_curr_preset_btn_id.data())) { s.LoadCurrPreset(); }
+
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip("reloads Current Preset from file");
+    ImGui::SameLine();
+
+    if(ImGui::SmallButton(UI::IconRevert{})) { s.RevertToDefault(); }
+
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Revert all changes to the originally saved values");
+    ImGui::SameLine();
+
+    if(ImGui::SmallButton(UI::IconPatch{})) { s.PatchSpells(); }
+
+    if(ImGui::IsItemHovered())
+        ImGui::SetTooltip("Apply current preset %ls to all spells", s.curr_preset.filename().c_str());
+    FontAwesome::Pop();
+
+    ImGui::Separator();
+
+    (void)r.filter.Draw("Filter");
+    FontAwesome::PushSolid();
+    RightAlignSmallButtons({ UI::IconReload{} });
+    if(ImGui::SmallButton(UI::IconReload{})) {
+        s.LoadPresets();
+        r.selected_path.clear();
+    }
+    FontAwesome::Pop();
+    if(ImGui::IsItemHovered()) ImGui::SetTooltip("Reloads all presets from disk");
+
+    std::string_view label;
+    ImVec2           curr_content_region;
+    ImGui::GetContentRegionAvail(&curr_content_region);
+    curr_content_region.y -= ImGui::GetFrameHeightWithSpacing();
+    if(r.warning[0] != '\0') curr_content_region.y -= ImGui::GetTextLineHeightWithSpacing();
+
+    if(ImGui::BeginListBox("##PresetList", curr_content_region)) {
+        for(auto itr = s.presets.begin(); itr != s.presets.end();) {
+            label = InlineUtils::wstringToString(itr->first.filename());
+
+            if(!r.filter.PassFilter(label.data())) continue;
+
+            const bool is_selected = (r.selected_path == itr->first);
+            {
+                ImGui::BeginGroup();
+                if(ImGui::Selectable(label.data(), is_selected, ImGuiSelectableFlags_AllowOverlap)) {
+                    r.selected_path = itr->first;
+                }
+
+                std::array<char, MAX_PATH> btn_id{}, snd_btn_id{};
+                sprintf_s(btn_id.data(), btn_id.size(), "%s##%s", static_cast<const char*>(UI::IconReload{}),
+                          label.data());
+                sprintf_s(snd_btn_id.data(), snd_btn_id.size(), "%s##%s", static_cast<const char*>(UI::IconTrashBin{}),
+                          label.data());
+                FontAwesome::PushSolid();
+                RightAlignSmallButtons({ btn_id.data(), snd_btn_id.data() });
+                r.DrawFeedbackButton(
+                    btn_id.data(), [&s, &itr]() { return s.ReloadPreset(itr->first); }, "Reloads %s from File",
+                    label.data());
+                ImGui::SameLine();
+                r.DrawFeedbackButton(
+                    snd_btn_id.data(),
+                    [&itr, &s, &r]() {
+                        if(s.curr_preset == itr->first) { s.curr_preset.clear(); }
+                        if(r.selected_path == itr->first) { r.selected_path.clear(); }
+                        const auto ret = std::filesystem::remove(itr->first);
+                        if(ret) { itr = s.presets.erase(itr); }
+                        return ret;
+                    },
+                    "Deletes %s from disk", label.data());
+
+                FontAwesome::Pop();
+                ImGui::EndGroup();
+            }
+            if(is_selected) ImGui::SetItemDefaultFocus();
+
+            if(itr != s.presets.end()) ++itr;
+        }
+        ImGui::EndListBox();
+    }
+
+    if(r.warning[0] != '\0')
+        ImGui::TextColored(ImGui::GetStyle()->Colors[ImGuiCol_PlotHistogramHovered], r.warning.data());
+    if(ImGui::InputText("Create Preset?", r.buff.data(), std::size(r.buff), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if(r.buff[0] == '\0') {
+            std::snprintf(r.warning.data(), std::size(r.warning), "Type in something!");
+        } else {
+            char created_file_path[1'024]{};
+            std::snprintf(created_file_path, std::size(created_file_path), BASE_PATH "Make Them Slow or Fast\\presets/%s.json",
+                          r.buff.data());
+
+            if(FilePtrManager f{ created_file_path, "wb" }) {
+                char                       writeBuffer[1'024]{};
+                rapidjson::FileWriteStream os(f.get(), writeBuffer, sizeof(writeBuffer));
+                rapidjson::PrettyWriter    writer(os);
+                rapidjson::Document        doc;
+                s.GetDefaultPreset(doc);
+                doc.Accept(writer);
+                s.presets.try_emplace(created_file_path, std::move(doc));
+                r.warning[0] = '\0';
+            } else {
+                std::snprintf(r.warning.data(), std::size(r.warning), "Failed to create preset! check the log for the reason.");
+            }
+        }
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+    // Right section: preset details
+    ImGui::BeginChild("RightSection", ImVec2(right_width, context_region.y), true);
+    if(const auto file_status = std::filesystem::status(s.curr_preset); s.curr_preset.empty() || !std::filesystem::exists(file_status) || !std::filesystem::is_regular_file(file_status)) {
+        constexpr auto msg = "No current preset selected. Please select one from the list on the "
+                             "left and click the save button.";
+        CenterText(msg);
+        constexpr auto color = ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+        ImGui::TextColored(color, msg);
+        constexpr auto msg_2 = "Unexpected behaviour follows if you proceed.";
+        CenterText(msg_2);
+        ImGui::TextColored(color, msg_2);
+        ImGui::Separator();
+    }
+    if(!r.selected_path.empty()) {
+        if(const auto it = s.presets.find(r.selected_path); it != s.presets.end()) {
+            rapidjson::Document& doc = it->second;
+            const auto selected      = InlineUtils::wstringToString(r.selected_path.filename());
+
+            CenterText(selected.data());
+            ImGui::Text(selected.data());
+            ImGui::Separator();
+            RenderJsonEditor(selected, doc);
+        }
+    } else {
+        ImGui::Text("Select a preset from the left.");
+    }
+    ImGui::EndChild();
 }
 
-void SMFRenderer::RenderJsonEditor(const std::string_view Path, ordered_nJson& jsonObject, ordered_nJson& hint)
-{
-	if (jsonObject.is_object()) {
-		RenderJsonObject(Path, jsonObject, hint);
-	} else if (jsonObject.is_array()) {
-		RenderJsonArray(Path, "", jsonObject, hint);
-	} else {
-		logger::error("Weird Error Detected at SMFRenderer::RenderJsonEditor. Given json object is neither object nor array");
-		CustomLogger::GetSingleton()->AddLog("[error] Weird Error Detected at SMFRenderer::RenderJsonEditor. Given json object is neither object nor array");
-	}
+void SMFRenderer::RenderJsonEditor(const std::string_view file, rapidjson::Document& doc) noexcept {
+    if(doc.IsObject()) {
+        for(auto& [name, value] : doc.GetObject()) {
+            std::array<char, MAX_PATH> temp{};
+            sprintf_s(temp.data(), temp.size(), "%s/%s", file.data(), name.GetString());
+            RenderJsonValue(temp.data(), name.GetString(), value, doc.GetAllocator());
+        }
+    } else if(doc.IsArray()) {
+        RenderJsonArray(file.data(), "[ ]", doc, doc.GetAllocator());
+    } else {
+        RenderJsonValue(file.data(), "", doc, doc.GetAllocator());
+    }
 }
 
-void SMFRenderer::RenderJsonValue(const std::string_view jsonPath, const std::string& key, ordered_nJson& value, ordered_nJson& hint)
-{
-	CustomLogger* c = CustomLogger::GetSingleton();
-	DataManager*  d = DataManager::GetSingleton();
-	std::string   currentPath(jsonPath);
-	currentPath += key + ".";
-	ImGui::PushID(currentPath.c_str());  // Using jsonPath as unique ID for ImGui
+// NOLINTBEGIN(*-no-recursion)
 
-	if (value.is_object()) {
-		// Render object
-		if (ImGui::TreeNode((key + " { }").c_str())) {
-			RenderJsonObject(currentPath, value, hint);
-			ImGui::TreePop();
-		}
-	} else if (value.is_array()) {
-		// Render array
-		if (ImGui::TreeNode((key + " [ ]").c_str())) {
-			RenderJsonArray(currentPath, key, value, hint);
-			ImGui::TreePop();
-		}
-	} else if (value.is_string()) {
-		// Render string input, combo boxes, etc.
-		if (key == "LogLevel") {
-			std::string           originalStringValue = value;
-			static int            currentLogLevel = 2;
-			constexpr const char* LogLevels[7] = { "trace", "debug", "info", "warn", "err", "critical", "off" };
-			if (ImGui::Combo(key.c_str(), &currentLogLevel, LogLevels, ((int)(sizeof(LogLevels) / sizeof(*LogLevels))))) {
-				value = std::string(LogLevels[currentLogLevel]);
-				c->AddLog(std::format("{} Selected LogLevel of key '{}' in Path {} from '{}' to '{}'", d->GetUsername(), key, jsonPath, originalStringValue, LogLevels[currentLogLevel]));
-			}
-		} else {
-			char   buffer[256];
-			size_t size = sizeof(buffer);
-			strncpy(buffer, value.get<std::string>().c_str(), size);
-			buffer[size - 1] = 0;
-			if (ImGui::InputText(key.c_str(), buffer, size, ImGuiInputTextFlags_EnterReturnsTrue)) {
-				std::string originalStringValue = value;
-				value = std::string(buffer);
-				c->AddLog(std::format("{} Changed Value of key '{}' in Path {} from '{}' to '{}'", d->GetUsername(), key, jsonPath, originalStringValue, buffer));
-			}
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Press Enter to save your input.\nMaximum allowed characters: %zu", size - 1sz);
-			}
-		}
-	} else if (value.is_boolean()) {
-		// Render checkbox for boolean
-		bool boolValue = value;
-		if (ImGui::Checkbox(key.c_str(), &boolValue)) {
-			bool originalBoolValue = value;
-			value = boolValue;
-			c->AddLog(std::format("{} Changed Value of Key '{}' in Path {} from {} to {}", d->GetUsername(), key, jsonPath, originalBoolValue, boolValue));
-		}
-	} else if (value.is_number_integer()) {
-		// Render input for integer
-		int intValue = value.get<int>();
-		if (ImGui::InputInt(key.c_str(), &intValue, ImGuiInputTextFlags_EnterReturnsTrue)) {
-			int originalIntValue = value;
-			value = intValue;
-			c->AddLog(std::format("{} Changed Value of Key '{}' in Path from '{}' to '{}'", d->GetUsername(), key, jsonPath, originalIntValue, intValue));
-		}
-	} else if (value.is_number_float()) {
-		// Render input for float
-		float floatValue = value.get<float>();
-		if (ImGui::InputFloat(key.c_str(), &floatValue, ImGuiInputTextFlags_EnterReturnsTrue)) {
-			float originalFloatValue = value;
-			value = floatValue;
-			c->AddLog(std::format("{} Changed Value of Key '{}' in Path from '{}' to '{}'", d->GetUsername(), key, jsonPath, originalFloatValue, floatValue));
-		}
-	}
+void SMFRenderer::RenderJsonValue(const char* uniqueID, const std::string_view key, rapidjson::Value& value, rapidjson::MemoryPoolAllocator<>& alloc) noexcept {
+    const ImGuiIDGuard currentPathIDManager{ uniqueID };
+    if(value.IsObject()) {
+        std::array<char, MAX_PATH> temp{};
+        sprintf_s(temp.data(), temp.size(), "%s { }", key.data());
+        if(ImGuiTreeNodeGuard i{ temp.data() }) {
+            std::array<char, MAX_PATH> temp1{};
+            sprintf_s(temp1.data(), temp1.size(), "%s/%s", uniqueID, key.data());
+            RenderJsonObject(temp1.data(), value, alloc);
+        }
+    } else if(value.IsArray()) {
+        std::array<char, MAX_PATH> temp{};
+        sprintf_s(temp.data(), temp.size(), "%s [ ]", key.data());
+        if(ImGuiTreeNodeGuard i{ temp.data() }) {
+            std::array<char, MAX_PATH> temp1{};
+            sprintf_s(temp1.data(), temp1.size(), "%s/%s", uniqueID, key.data());
+            RenderJsonArray(temp1.data(), key, value, alloc);
+        }
+    } else if(value.IsString()) {
+        if(key == "LogLevel") [[unlikely]] {
+            int                  currentLogLevel{ spdlog::level::from_str(value.GetString()) };
+            constexpr std::array LogLevels{ "trace"sv, "debug"sv,    "info"sv, "warning"sv,
+                                            "error"sv, "critical"sv, "off"sv };
 
-	RenderHint(hint);
-	ImGui::PopID();
+            if(ImGui::BeginCombo(key.data(), LogLevels[currentLogLevel].data())) {
+                for(int i{}; i < LogLevels.size(); i++) {
+                    const bool isSelected = (currentLogLevel == i);
+                    if(ImGui::Selectable(LogLevels[i].data(), isSelected)) {
+                        currentLogLevel = i;
+                        value           = rapidjson::Value{}.SetString(
+                            LogLevels[currentLogLevel].data(),
+                            static_cast<rapidjson::SizeType>(LogLevels[currentLogLevel].size()), alloc);
+                    }
+                    if(isSelected) { ImGui::SetItemDefaultFocus(); }
+                }
+                ImGui::EndCombo();
+            }
+        } else {
+            char buffer[256];
+            strcpy_s(buffer, std::size(buffer), value.GetString());
+            if(ImGui::InputText(key.data(), buffer, std::size(buffer), ImGuiInputTextFlags_EnterReturnsTrue)) {
+                value = rapidjson::Value{}.SetString(buffer, static_cast<rapidjson::SizeType>(strlen(buffer)), alloc);
+            }
+            if(ImGui::IsItemHovered()) {
+                ImGui::SetTooltip(
+                    "Press Enter to save your input.\nMaximum allowed characters: %zu", std::size(buffer) - 1);
+            }
+        }
+    } else if(value.IsBool()) {
+        auto boolValue{ value.GetBool() };
+        if(ImGui::Checkbox(key.data(), &boolValue)) { value = boolValue; }
+    } else if(value.IsInt()) {
+        auto intValue{ value.GetInt() };
+        if(ImGui::InputInt(key.data(), &intValue, ImGuiInputTextFlags_EnterReturnsTrue)) {
+            value = intValue;
+        }
+    } else if(value.IsInt64()) {
+        auto int64Value{ value.GetInt64() };
+        if(ImGui::InputScalar(key.data(), ImGuiDataType_S64, &int64Value, nullptr, nullptr, "%lld", ImGuiInputTextFlags_EnterReturnsTrue)) {
+            value = int64Value;
+        }
+    } else if(value.IsUint()) {
+        auto uintValue = value.GetUint();
+        if(ImGui::InputScalar(key.data(), ImGuiDataType_U32, &uintValue, nullptr, nullptr, "%u", ImGuiInputTextFlags_EnterReturnsTrue)) {
+            value = uintValue;
+        }
+    } else if(value.IsUint64()) {
+        auto uint64Value = value.GetUint64();
+        if(ImGui::InputScalar(key.data(), ImGuiDataType_U64, &uint64Value, nullptr, nullptr, "%llu", ImGuiInputTextFlags_EnterReturnsTrue)) {
+            value = uint64Value;
+        }
+    } else if(value.IsFloat()) {
+        auto floatValue{ value.GetFloat() };
+        if(ImGui::InputFloat(key.data(), &floatValue, 0, 0, "%.3f", ImGuiInputTextFlags_EnterReturnsTrue)) {
+            value = floatValue;
+        }
+    } else if(value.IsDouble()) {
+        double doubleValue = value.GetDouble();
+        if(ImGui::InputDouble(key.data(), &doubleValue, 0, 0, "%.6f", ImGuiInputTextFlags_EnterReturnsTrue)) {
+            value = doubleValue;
+        }
+    }
 }
 
-void SMFRenderer::RenderJsonObject(const std::string_view jsonPath, ordered_nJson& j, ordered_nJson& hint)
-{
-	for (auto& [key, value] : j.items()) {
-		std::string currentPath(jsonPath);
-		currentPath += key + ".";
-		RenderJsonValue(currentPath, key, value, hint[key]);
-	}
+void SMFRenderer::RenderJsonObject(const char* uniqueID, rapidjson::Value& value, rapidjson::MemoryPoolAllocator<>& alloc) noexcept {
+    for(auto& [a_name, a_value] : value.GetObject()) {
+        std::array<char, MAX_PATH> temp{};
+        sprintf_s(temp.data(), temp.size(), "%s/%s", uniqueID, a_name.GetString());
+        RenderJsonValue(temp.data(), a_name.GetString(), a_value, alloc);
+    }
 }
 
-void SMFRenderer::RenderHint(ordered_nJson& hint)
-{
-	std::string clue = hint.is_string() ? hint.get<std::string>() : "";
-	if (!clue.empty()) {
-		ImGui::SameLine();
-		if (ImGui::Button(UI::question.c_str())) {}
-		if (ImGui::IsItemHovered()) {
-			ImGui::SetTooltip(clue.c_str());
-		}
-	}
+void SMFRenderer::RenderJsonArray(const char* uniqueID, const std::string_view key, rapidjson::Value& value, rapidjson::MemoryPoolAllocator<>& alloc) noexcept {
+    const ImGuiIDGuard current_path_id_manager{ uniqueID };
+    for(auto it{ value.Begin() }; it != value.End();) {
+        const auto i{ static_cast<rapidjson::SizeType>(std::distance(value.Begin(), it)) };
+        std::array<char, MAX_PATH> Path{};
+        sprintf_s(Path.data(), Path.size(), "%s/%s", uniqueID, key.data());
+
+        const ImGuiIDGuard path_id_manager{ Path.data() };
+        char               buff[64];
+        std::snprintf(buff, std::size(buff), "[%u]", i);
+        std::array<char, MAX_PATH> uniqueIDBuffer{};
+        sprintf_s(uniqueIDBuffer.data(), std::size(uniqueIDBuffer), "%s/%u", Path.data(), i);
+        RenderJsonValue(uniqueIDBuffer.data(), buff, *it, alloc);
+
+        ImGui::SameLine();
+        if(ImGui::Button(UI::IconCross{})) {
+            it = value.Erase(it);
+            continue;
+        }
+        if(ImGui::IsItemHovered()) {
+            char buffer[64];
+            sprintf_s(buffer, sizeof(buffer), "Removes line [%u]", i);
+            ImGui::SetTooltip(buffer);
+        }
+        if(it != value.Begin()) {
+            ImGui::SameLine();
+            if(ImGui::ArrowButton("##up", ImGuiDir_Up)) {  // Move up
+                std::iter_swap(it, std::prev(it));
+                continue;
+            }
+            if(ImGui::IsItemHovered()) { ImGui::SetTooltip("Click Me to Move me Up"); }
+        }
+        if(std::next(it) != value.End()) {
+            ImGui::SameLine();
+            if(ImGui::ArrowButton("##down", ImGuiDir_Down)) {  // Move Down
+                std::iter_swap(it, std::next(it));
+                continue;
+            }
+            if(ImGui::IsItemHovered()) { ImGui::SetTooltip("Click Me to Move me Down"); }
+        }
+        ++it;
+    }
+
+    if(ImGui::Button(UI::IconPlus{})) {
+        value.PushBack(rapidjson::Value{}.SetString("", 0, alloc), alloc);
+    }
+    if(ImGui::IsItemHovered()) { ImGui::SetTooltip("Adds a Empty Line"); }
 }
 
-SMFRenderer::FileCreationType SMFRenderer::CreateNewJsonFile(const std::string_view filename, const ordered_nJson& jsonObject)
-{
-	if (!fs::exists(filename)) {
-		std::ofstream file(filename.data());
+SMFRenderer::SMFRenderer():
+    warning(2'048, '\0'), buff(MAX_PATH, '\0') { }
 
-		if (file.is_open()) {
-			file << jsonObject.dump();  // no need to Dump JSON with indentation of 4 spaces because user will(should) not manually edit json
-			file.close();
-			return FileCreationType::OK;
-		} else {
-			logger::error("Unable to open file for writing: {}", filename);
-			return FileCreationType::Error;
-		}
-	} else {
-		logger::error("Don't try to create Duplicates of : {}", filename);
-		return FileCreationType::Duplicate;
-	}
+template<typename F>
+void SMFRenderer::DrawFeedbackButton(const std::string_view id, F&& func, const char* const fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    const double now = ImGui::GetTime();
+
+    bool       push_color = false;
+    const auto it         = reload_feedback.find(id.data());
+    if(it != reload_feedback.end()) {
+        if(now < it->second.first) {
+            ImGui::PushStyleColor(ImGuiCol_Button, it->second.second);
+            push_color = true;
+        } else {
+            reload_feedback.erase(it);
+        }
+    }
+
+    const bool clicked = ImGui::SmallButton(id.data());
+
+    if(ImGui::IsItemHovered()) { ImGui::SetTooltipV(fmt, args); }
+
+    if(push_color) { ImGui::PopStyleColor(); }
+    if(clicked) {
+        reload_feedback[id.data()] = std::pair<double, ImVec4>{ now + 5.0, func() ? ImVec4(0.2f, 0.8f, 0.2f, 1.0f) : ImVec4(0.9f, 0.2f, 0.2f, 1.0f) };
+    }
+
+    va_end(args);
 }
 
-SMFRenderer::FileCreationType SMFRenderer::CreateNewJsonFile(const std::string_view filename, std::shared_ptr<ordered_nJson> jsonObject)
-{
-	if (!fs::exists(filename)) {
-		std::ofstream file(filename.data());
-
-		if (file.is_open()) {
-			file << jsonObject->dump();  // no need to Dump JSON with indentation of 4 spaces because user will(should) not manually edit json
-			file.close();
-			return FileCreationType::OK;
-		} else {
-			logger::error("Unable to open file for writing: {}", filename);
-			return FileCreationType::Error;
-		}
-	} else {
-		logger::error("Don't try to create Duplicates of : {}", filename);
-		return FileCreationType::Duplicate;
-	}
-}
-
-bool SMFRenderer::SaveJsonToFile(const std::string_view filename, const ordered_nJson& jsonObject)
-{
-	std::ofstream file(filename.data());
-
-	if (file.is_open()) {
-		file << jsonObject.dump();  // no need to Dump JSON with indentation of 4 spaces because user will(should) not manually edit json
-		file.close();
-		return true;
-	} else {
-		logger::error("Unable to open file for writing: {}", filename);
-	}
-	return false;
-}
-
-bool SMFRenderer::SaveJsonToFile(const std::string_view filename, std::shared_ptr<ordered_nJson> jsonObject)
-{
-	std::ofstream file(filename.data());
-
-	if (file.is_open()) {
-		file << jsonObject->dump();  // no need to Dump JSON with indentation of 4 spaces because user will(should) not manually edit json
-		file.close();
-		return true;
-	} else {
-		logger::error("Unable to open file for writing: {}", filename);
-	}
-	return false;
-}
-
-void SMFRenderer::RenderJsonArray(const std::string_view jsonPath, std::string_view key, ordered_nJson& j, ordered_nJson& hint)
-{
-	CustomLogger*                c = CustomLogger::GetSingleton();
-	DataManager*                 d = DataManager::GetSingleton();
-	std::string                  currentPath(jsonPath);
-	currentPath += key;
-	currentPath += ".";
-	ImGui::PushID(currentPath.c_str());
-	for (size_t i = 0; i < j.size(); ++i) {
-		std::string Path(currentPath);
-		Path += "[" + std::to_string(i) + "].";
-
-		ImGui::PushID(Path.c_str());
-		if (hint.is_array()) {
-			RenderJsonValue(Path, "[" + std::to_string(i) + "]", j[i], hint[i]);
-		} else {
-			RenderJsonValue(Path, "[" + std::to_string(i) + "]", j[i], hint);
-		}
-		ImGui::SameLine();
-		if (ImGui::Button(UI::x.c_str())) {
-			if (jsonPath.find("SPELL File(s) to Exclude") != std::string::npos) {
-				d->GetModifiableTESFileArray().erase(j[i]);
-			}
-			if (jsonPath.find("SPELL FormID to Exclude") != std::string::npos) {
-				d->GetModifiableFormIDArray().erase(j[i]);
-			}
-			c->AddLog(std::format("{} Decided to Remove {} Value in Key '{}' in Path {}", d->GetUsername(), j[i].dump(), key, jsonPath));
-			j.erase(j.begin() + i);
-			ImGui::PopID();
-			ImGui::PopID();
-			return;  // exit to avoid further processing as the array is modified
-		}
-		if (ImGui::IsItemHovered()) {
-			ImGui::SetTooltip(std::string("Removes line [" + std::to_string(i) + "]").c_str());
-		}
-		if (i > 0sz) {
-			ImGui::SameLine();
-			if (ImGui::ArrowButton("##up", ImGuiDir_Up)) {  //Move up
-				c->AddLog(std::format("{} Decided to move {} Value in Key '{}' in Path {} One Step Above", d->GetUsername(), j[i].dump(), key, jsonPath));
-				std::swap(j[i], j[i - 1sz]);
-				ImGui::PopID();
-				ImGui::PopID();
-				return;
-			}
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Click Me to Move me Up");
-			}
-		}
-		if (i < (j.size() - 1sz)) {
-			ImGui::SameLine();
-			if (ImGui::ArrowButton("##down", ImGuiDir_Down)) {  //Move Down
-				c->AddLog(std::format("{} Decided to move {} Value from Key '{}' in Path {} One Step Below", d->GetUsername(), j[i].dump(), key, jsonPath));
-				std::swap(j[i], j[i + 1sz]);
-				ImGui::PopID();
-				ImGui::PopID();
-				return;
-			}
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Click Me to Move me Down");
-			}
-		}
-		ImGui::PopID();
-	}
-
-	if (ImGui::Button(UI::plus.c_str())) {
-		// add a default value to the array
-		j.push_back("");
-		c->AddLog(std::format("{} Added Value \"\" into Last position of Key '{}' in Path {}", d->GetUsername(), key, jsonPath));
-		ImGui::PopID();
-		ImGui::PopID();
-		return;
-	}
-	if (ImGui::IsItemHovered()) {
-		ImGui::SetTooltip("Adds a Empty Line");
-	}
-	ImGui::PopID();
-}
-
-inline CustomLogger* CustomLogger::GetSingleton()
-{
-	static CustomLogger Singleton;
-	return std::addressof(Singleton);
-}
-
-void CustomLogger::AddLog(const std::string& message)
-{
-	std::chrono::time_point now = std::chrono::system_clock::now();
-	std::time_t             now_time = std::chrono::system_clock::to_time_t(now);
-	std::tm                 local_tm = *std::localtime(&now_time);
-	std::ostringstream      oss;
-
-	oss << "[" << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S") << "] " << message;
-	_logs.push_back(oss.str());
-
-	size_t oldSize = _lineOffsets.empty() ? 0 : _lineOffsets.back();
-	for (char c : oss.str()) {
-		oldSize++;
-		if (c == '\n') {
-			_lineOffsets.push_back(oldSize);
-		}
-	}
-	_scrollToBottom = true;
-}
-
-inline void CustomLogger::ClearLogs()
-{
-	std::lock_guard<std::mutex> lock(_lock);
-	_logs.clear();
-	_lineOffsets.clear();
-	_scrollToBottom = false;
-}
-
-inline const std::vector<std::string>& CustomLogger::GetLogs() const
-{
-	std::lock_guard<std::mutex> lock(_lock);
-	return _logs;
-}
-
-inline const std::string CustomLogger::GetLatestLog() const
-{
-	std::lock_guard<std::mutex> lock(_lock);
-
-	constexpr const char* emptyLog = "Default(No Logs available)";
-	if (_logs.empty()) {
-		return emptyLog;
-	}
-
-	std::string formattedLog = std::format("[{}] {}", _logs.size(), _logs.back());
-	return formattedLog;
-}
-
-bool CustomLogger::ShouldScrollToBottom() const
-{
-	std::lock_guard<std::mutex> lock(_lock);
-	return _scrollToBottom;
-}
-
-void CustomLogger::ResetScrollToBottom()
-{
-	std::lock_guard<std::mutex> lock(_lock);
-	_scrollToBottom = false;
-}
-
-std::vector<std::string> CustomLogger::GetFilteredLogs(const std::string& filter) const
-{
-	std::lock_guard<std::mutex> lock(_lock);
-	std::vector<std::string>    filteredLogs;
-	for (const auto& log : _logs) {
-		if (log.find(filter) != std::string::npos) {
-			filteredLogs.push_back(log);
-		}
-	}
-	return filteredLogs;
-}
+// NOLINTEND(*-no-recursion)
+#pragma pop_macro("GetObject")

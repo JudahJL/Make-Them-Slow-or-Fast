@@ -1,58 +1,119 @@
-# Make Them Slow or Fast - A spell Patcher
-A simple SKSE plugin to patch All Aimed Fire and Forget Spells at runtime. Supports All Runtimes.
+# Make Them Slow or Fast
 
-- [NG](https://www.nexusmods.com/skyrimspecialedition/mods/109355)
+A simple SKSE plugin to patch all aimed Fire and Forget spells at runtime. Supports all Skyrim runtimes.
 
-## Requirements
+[![Nexus Mods](https://img.shields.io/badge/Nexus-NG-blue)](https://www.nexusmods.com/skyrimspecialedition/mods/109355)
 
-- [Git](https://git-scm.com/)
-  - Download latest version from [Here](https://git-scm.com/downloads)
-- [CMake](https://cmake.org/)
-  - Download latest version from [Here](https://cmake.org/download/) and add to your `path` during installation. Must be above v3.24.0
-- [Vcpkg](https://github.com/microsoft/vcpkg)
-  - Add the environment variable `VCPKG_ROOT` with the value as the path to the folder containing vcpkg
-- [Visual Studio Community 2022](https://visualstudio.microsoft.com/)
-  - Desktop development with C++
-- [CommonLibSSE-NG](https://github.com/CharmedBaryon/CommonLibSSE-NG)
-  - No Need To Install (or) Download Separately
-- Recommended : [Visual Studio Community 2022](https://visualstudio.microsoft.com/)
-  - This is What I used
-  
+## Overview
+
+This plugin dynamically modifies the behavior of Fire and Forget spells in Skyrim, allowing you to make them faster or slower as needed. It works with all Skyrim versions including Special Edition, Anniversary Edition, and VR.
+
 ## User Requirements
-- [Skyrim Script Extender](https://skse.silverlock.org/)
-  - Needed For any SKSE Plugin
-- [Address Library for SKSE](https://www.nexusmods.com/skyrimspecialedition/mods/32444)
-  - Needed for SSE/AE
-- [VR Address Library for SKSEVR](https://www.nexusmods.com/skyrimspecialedition/mods/58101)
-  - Needed for VR
 
-## Installation Instructions
-Use Git GUI or At the Directory of your choice, open terminal (or) cmd (or) Powershell and enter
+### Required Dependencies
+- [Skyrim Script Extender (SKSE)](https://skse.silverlock.org/) - Required for any SKSE plugin
+- [Address Library for SKSE](https://www.nexusmods.com/skyrimspecialedition/mods/32444) - Required for SSE/AE
+- [VR Address Library for SKSEVR](https://www.nexusmods.com/skyrimspecialedition/mods/58101) - Required for VR
+
+## Development Requirements
+
+### Prerequisites
+- [Git](https://git-scm.com/downloads) - Latest version
+- [Visual Studio Community 2022](https://visualstudio.microsoft.com/) with Desktop development with C++ workload
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/JudahJL/Make-Them-Slow-or-Fast.git
+   cd Make-Them-Slow-or-Fast
+   ```
+
+2. Build the project:
+   ```bash
+   # Using the provided PowerShell script
+   .\build.ps1
+   
+   # Or manually with xmake
+   xmake -y Make_Them_Slow_or_Fast
+   ```
+
+### Build Script Explanation
+
+The `build.ps1` script automates the build process with the following steps:
+
+1. **Environment Setup**: If not running in GitHub Actions and a `.env` file exists, it loads environment variables from the file
+2. **Package Management**: Updates xmake repositories and upgrades project dependencies
+3. **IDE Support**: Generates CMakeLists.txt for CLion integration
+4. **Build**: Compiles the project with the target name `Make_Them_Slow_or_Fast`
+
+The script essentially runs:
+```bash
+xmake repo --update
+xmake require --upgrade  
+xmake project -k cmakelists
+xmake -y Make_Them_Slow_or_Fast
 ```
-git clone https://github.com/JudahJL/Make-Them-Slow-or-Fast.git
+
+### Environment Variables
+
+The build system supports several environment variables for customization:
+
+#### Project-Specific Variables (from xmake.lua)
+- **`MO2_MODS_DIR`**: If set, copies built files to `{MO2_MODS_DIR}/testing/skse/plugins/` for Mod Organizer 2 testing
+
+#### CommonLibSSE-NG Variables (from submodule)
+- **`XSE_TES5_MODS_PATH`**: Alternative mods directory path for installation
+- **`XSE_TES5_GAME_PATH`**: Skyrim game directory path for direct installation
+
+#### Usage Examples
+```bash
+# For Mod Organizer 2 testing (project-specific)
+$env:MO2_MODS_DIR = "C:\Modding\MO2\mods"
+.\build.ps1
+
+# For direct game installation (CommonLibSSE-NG)
+$env:XSE_TES5_GAME_PATH = "C:\Steam\steamapps\common\Skyrim Special Edition"
+.\build.ps1
+
+# For alternative mods directory (CommonLibSSE-NG)
+$env:XSE_TES5_MODS_PATH = "C:\Modding\Mods"
+.\build.ps1
 ```
 
-## Build Instructions
-If you are using [Visual Studio Code](https://code.visualstudio.com/0), Select A Build Preset and Click Build. There are 4 Build Presets
-- Debug : Purely Debugging, No Optimizations. Highly Recomended For Release Purposes.
-- Release : Highly Optimized, No Debugging. Highly Recomended For Debugging Purposes.
-- RelWithDebInfo : Partly Optimized, Partly Debugging.
-- MinSizeRel : Focus on Size rather than Optimizations. is Still Optimized.
+#### Default Behavior
+Without environment variables, the build system:
+- Copies `.dll` and `.pdb` files to `contrib/Distribution/data/skse/plugins/`
+- Uses the standard xmake build process
 
-## Extra
-- It is Adviced to add "VsDevCmd.bat" from Visual Studio to your Terminal (or) IDE to execute automatically to avoid cmake errors like the one mentioned below.This was a HUGE Headache for me. If you want to know more about "VsDevCmd.bat", Google is your Friend.
+## Development
+
+### Build System
+This project uses [xmake](https://xmake.io/) as the build system.
+
+### Available Commands
+
+#### Package Management
+```bash
+# Update package repositories
+xmake repo --update
+
+# Upgrade project dependencies
+xmake require --upgrade
 ```
-  The CMAKE_CXX_COMPILER:
 
-    cl.exe
+#### IDE Support
+```bash
+# Generate project files for various IDEs
+xmake project -k cmakelists  # For CLion
+xmake project -k vsxmake     # For Visual Studio
+```
 
-  is not a full path and was not found in the PATH.
-``` 
+### Configuration Rules
+```
+Blacklist(ID) > Blacklist(File)
+```
 
 ## License
 
-[Apache License 2.0](LICENSE)
-
-## Credits
-- [CharmedBaryon](https://github.com/CharmedBaryon) For CommonLibSSE-NG
-- [Skyrim Scripting](https://github.com/SkyrimScriptinghttps://github.com/SkyrimScripting) for the Youtube Tutorials
+[MIT License](LICENSE)
