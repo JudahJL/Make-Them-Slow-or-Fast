@@ -6,7 +6,7 @@ includes ("lib/commonlibsse-ng")
 
 -- set project
 set_project("Make_Them_Slow_or_Fast")
-set_version("2.1.0")
+set_version("2.2.0")
 set_license("Apache-2.0")
 
 -- set defaults
@@ -50,9 +50,6 @@ target("Make_Them_Slow_or_Fast")
 
     -- postbuild: copy .dll and .pdb files to contrib/Distribution/data/skse/plugins
     after_build(function(target)
-        import("core.project.depend")
-        import("core.project.task")
-
         -- Helper function to copy a file to multiple directories
         local function copy_file_to_dirs(file, dirs)
             if not os.isfile(file) then return end
@@ -65,23 +62,22 @@ target("Make_Them_Slow_or_Fast")
             end
         end
 
-        depend.on_changed(function()
-            local target_file = target:targetfile()
-            local symbol_file = target:symbolfile()
-            local dest_dir = "contrib/Distribution/data/skse/plugins"
+        -- Always copy files after build, don't rely on dependency tracking
+        local target_file = target:targetfile()
+        local symbol_file = target:symbolfile()
+        local dest_dir = "contrib/Distribution/data/skse/plugins"
 
-            -- Optional secondary folder for MO2
-            local mo2_dir = os.getenv("MO2_MODS_DIR")
-            local secondary_dir
-            if mo2_dir then
-                secondary_dir = path.join(mo2_dir, "testing/skse/plugins")
-            end
-            
-            -- ensure destination directory exists
-            os.mkdir(dest_dir)
-            
-            -- Copy both .dll and .pdb to all relevant folders
-            copy_file_to_dirs(target_file, {dest_dir, secondary_dir})
-            copy_file_to_dirs(symbol_file, {dest_dir, secondary_dir})
-        end, { changed = target:is_rebuilt(), files = { target:targetfile() } })
+        -- Optional secondary folder for MO2
+        local mo2_dir = os.getenv("MO2_MODS_DIR")
+        local secondary_dir
+        if mo2_dir then
+            secondary_dir = path.join(mo2_dir, "testing/skse/plugins")
+        end
+        
+        -- ensure destination directory exists
+        os.mkdir(dest_dir)
+        
+        -- Copy both .dll and .pdb to all relevant folders
+        copy_file_to_dirs(target_file, {dest_dir, secondary_dir})
+        copy_file_to_dirs(symbol_file, {dest_dir, secondary_dir})
     end)
