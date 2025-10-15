@@ -10,7 +10,7 @@ void SKSEEvent::InitializeMessaging() {
 void SKSEEvent::MessageListener(SKSE::MessagingInterface::Message* message) {
     switch(message->type) {
         case SKSE::MessagingInterface::kDataLoaded:
-            Settings::GetSingleton().PopulateFormIDMap().PatchSpells();
+            Settings::GetSingleton().PatchSpells();
             break;
         default: break;
     }

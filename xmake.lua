@@ -6,7 +6,7 @@ includes ("lib/commonlibsse-ng")
 
 -- set project
 set_project("Make_Them_Slow_or_Fast")
-set_version("2.0.0")
+set_version("2.1.0")
 set_license("Apache-2.0")
 
 -- set defaults

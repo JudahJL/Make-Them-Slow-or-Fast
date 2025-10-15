@@ -323,7 +323,7 @@ Settings& Settings::PopulateSpellInfo() {
 }
 
 Settings::Rule ParseRule(const char* s) {
-    if(_stricmp(s, "whitelist") == 0) return Settings::Rule::kWhitelist;
+    if(_stricmp(s, "blacklist") == 0) return Settings::Rule::kBlacklist;
     return Settings::Rule::kNone;
 }
 
@@ -393,19 +393,13 @@ std::optional<bool> Settings::IsAllowed(const std::string_view file, RE::FormID 
     const FileRule& rules = it->second;
 
     // 1. Per-ID rules first
-    if(const auto f = rules.per_id.find(id); f != rules.per_id.end()) {
-        switch(f->second) {
-            case Rule::kWhitelist: return true;
-            default:               break;
-        }
+    if(auto f = rules.per_id.find(id); f != rules.per_id.end()) {
+        if(f->second == Rule::kBlacklist) return false;
     }
 
     // 2. Global file rule
     if(rules.global.has_value()) {
-        switch(*rules.global) {
-            case Rule::kWhitelist: return true;
-            default:               break;
-        }
+        if(*rules.global == Rule::kBlacklist) return false;
     }
 
     // 3. No decision → use default behavior

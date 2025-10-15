@@ -30,7 +30,7 @@ public:
 
     enum class Rule : std::uint8_t {
         kNone = 0,
-        kWhitelist,
+        kBlacklist
     };
 
     struct FileRule {
